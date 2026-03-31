@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { io } from 'socket.io-client'
-import Footer from './components/Footer.vue'
 import { ref } from 'vue'
 
 const socket = io('http://localhost:3001', {
@@ -37,7 +36,6 @@ function exitLobby() {
     <button @click="() => addLobby(lobbyName)">crear lobby</button>
     <button @click="() => exitLobby()">salir lobby</button>
   </div>
-  <Footer />
 </template>
 
 <style scoped>
