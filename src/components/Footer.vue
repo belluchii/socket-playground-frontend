@@ -8,7 +8,7 @@
 footer {
   background: #000;
   width: 100%;
-  height: 200px;
+  height: 100px;
   position: absolute;
   bottom: 0;
 }
