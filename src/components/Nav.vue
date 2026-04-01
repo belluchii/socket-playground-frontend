@@ -45,7 +45,7 @@ const closeMobileMenu = (): void => {
       <div class="nav-logo" @click="goHome">{{ logoText }}<span class="nav-logo-dot">.</span></div>
 
       <div class="nav-links">
-        <router-link
+        <!-- <router-link
           v-for="link in links"
           :key="link.to"
           :to="link.to"
@@ -53,7 +53,7 @@ const closeMobileMenu = (): void => {
           active-class="active"
         >
           {{ link.label }}
-        </router-link>
+        </router-link> -->
       </div>
 
       <div class="nav-action">
@@ -73,7 +73,7 @@ const closeMobileMenu = (): void => {
     <!-- Mobile menu -->
     <Transition name="menu">
       <div v-if="isOpen" class="nav-mobile">
-        <router-link
+        <!-- <router-link
           v-for="link in links"
           :key="link.to"
           :to="link.to"
@@ -82,7 +82,7 @@ const closeMobileMenu = (): void => {
           @click="closeMobileMenu"
         >
           {{ link.label }}
-        </router-link>
+        </router-link> -->
         <div class="nav-mobile-action">
           <Button variant="secondary" block @click="(handleCta(), closeMobileMenu())">
             {{ ctaText }}

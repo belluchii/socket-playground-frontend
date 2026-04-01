@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { io } from 'socket.io-client'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import Footer from './components/Footer.vue'
 import Nav from './components/Nav.vue'
 import Badge from './common/Badge.vue'
+import Button from './common/Button.vue'
+import Table from './common/Table.vue'
 
 const socket = io('http://localhost:3001', {
   transports: ['websocket'],
@@ -15,15 +17,20 @@ socket.on('connect', () => {
   socket.emit('getLobbies')
 })
 
+interface Lobby {
+  id: string
+  users: number
+}
+
 const lobbyName = ref('')
-let lobbys = ref<{ id: string; users: number }[]>([])
+const lobbys = ref<Lobby[]>([])
 
 function joinLobby(lobby: string) {
   socket.emit('joinLobby', lobby)
 }
 
 function addLobby(lobby: string) {
-  if (lobby != '') joinLobby(lobby)
+  if (lobby !== '') joinLobby(lobby)
 }
 
 function exitLobby(lobby: string) {
@@ -41,53 +48,115 @@ socket.on('joinedLobby', (texto) => {
 socket.on('lobbiesList', (lobbies) => {
   lobbys.value = lobbies
 })
+
+// ─── Las keys tienen que coincidir entre columns y rows ───
+const columns = [
+  { key: 'id', label: 'Lobby', mono: true },
+  { key: 'players', label: 'Players', align: 'center' as const },
+  { key: 'status', label: 'Status', align: 'center' as const },
+  { key: 'action', label: '', align: 'right' as const },
+]
+
+const rows = computed(() =>
+  lobbys.value.map((lobby) => ({
+    id: lobby.id,
+    players: `${lobby.users}/6`,
+    status: lobby.users >= 6 ? 'Full' : 'Open',
+    _raw: lobby,
+  })),
+)
 </script>
 
 <template>
   <Nav />
-  <div class="cont">
-    <p
-      class="lobby"
-      @click="() => joinLobby(texto.id)"
-      v-for="(texto, index) in lobbys"
-      :key="texto.id"
-    >
-      {{ texto.id }} - Jugadores: {{ texto.users }}/6
-    </p>
-  </div>
-  <div class="buttons-cont">
-    <input type="text" v-model="lobbyName" />
-    <button @click="() => addLobby(lobbyName)">crear lobby</button>
-    <button @click="() => exitLobby(lobbyName)">salir lobby</button>
-    <button @click="() => getCurrentLobbies()">obtener lobbys actuales</button>
-  </div>
+
+  <main class="page">
+    <Table :columns="columns" :rows="rows">
+      <!-- Celda players con badge -->
+      <template #cell-players="{ row }">
+        <Badge :variant="row._raw.users >= 6 ? 'red' : 'orange'">
+          {{ row.players }}
+        </Badge>
+      </template>
+
+      <!-- Celda status con badge -->
+      <template #cell-status="{ row }">
+        <Badge :variant="row._raw.users >= 6 ? 'red' : 'blue'">
+          {{ row.status }}
+        </Badge>
+      </template>
+
+      <!-- Celda action con botón -->
+      <template #cell-action="{ row }">
+        <Button
+          variant="outline"
+          size="sm"
+          :disabled="row._raw.users >= 6"
+          @click="joinLobby(row.id)"
+        >
+          Join →
+        </Button>
+      </template>
+
+      <!-- Empty -->
+      <template #empty> No hay lobbys disponibles </template>
+    </Table>
+
+    <!-- Controles -->
+    <div class="controls">
+      <input class="input" type="text" v-model="lobbyName" placeholder="Nombre del lobby…" />
+      <div class="controls-buttons">
+        <Button variant="secondary" size="sm" @click="addLobby(lobbyName)"> Crear lobby </Button>
+        <Button variant="outline" size="sm" @click="exitLobby(lobbyName)"> Salir lobby </Button>
+        <Button variant="yellow" size="sm" @click="getCurrentLobbies()"> Refresh </Button>
+      </div>
+    </div>
+  </main>
+
   <Footer />
 </template>
 
 <style scoped>
-.cont {
-  flex-direction: column;
-  gap: 10px;
+.page {
+  max-width: 1200px;
+  width: 90%;
+  margin: 0 auto;
+  padding-top: calc(var(--space-24) + var(--space-8));
+  padding-bottom: var(--space-16);
+}
+
+.controls {
+  margin-top: var(--space-8);
   display: flex;
-  padding: 20px;
-  color: #fff;
-  width: 400px;
-  height: 400px;
-  margin: auto;
-  margin-top: 10px;
-  border: 1px solid #fff;
-  background: #000000;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
-.buttons-cont {
-  width: 400px;
-  margin: auto;
-  margin-top: 20px;
+.input {
+  width: 100%;
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  font-weight: var(--weight-regular);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-white);
+  border: var(--border-thick) solid var(--color-black);
+  border-radius: var(--radius-none);
+  outline: none;
+  transition: box-shadow 0.15s;
+  color: var(--color-black);
 }
 
-.lobby {
-  background: #444;
-  padding: 5px;
-  border: 1px solid #fff;
+.input::placeholder {
+  color: var(--color-grey-lt);
+}
+
+.input:focus {
+  box-shadow: var(--shadow-hard-orange);
+}
+
+.controls-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
 }
 </style>
