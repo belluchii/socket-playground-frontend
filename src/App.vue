@@ -1,37 +1,88 @@
 <script setup lang="ts">
+import { join } from 'path'
 import { io } from 'socket.io-client'
-import Footer from './components/Footer.vue'
+import { ref } from 'vue'
 
 const socket = io('http://localhost:3001', {
   transports: ['websocket'],
   reconnection: true,
 })
 
-socket.on('connect', () => console.log(`Hola de nuevo id: ${socket.id}`))
-socket.on('client-clicked', (text) => console.log(text))
+socket.on('connect', () => {
+  console.log(`Hola de nuevo id: ${socket.id}`)
+  socket.emit('getLobbies');
+  })
 
-function onClick(number: string) {
-  socket.emit('pressed', 'boton clickeado' + number)
+const lobbyName = ref('')
+let lobbys = ref<{ id: string; users: number }[]>([])
+
+
+function joinLobby(lobby: string) {
+  socket.emit('joinLobby', lobby);
 }
+
+function addLobby(lobby: string) {
+  if (lobby != '') joinLobby(lobby);
+}
+
+
+function exitLobby(lobby: string) {
+  socket.emit('exitLobby', lobby);
+}
+
+function getCurrentLobbies() {
+  socket.emit('getCurrentLobbies');
+}
+
+socket.on('joinedLobby', (texto) => {
+  console.log(texto);
+
+})
+
+socket.on('lobbiesList', (lobbies) => {
+  lobbys.value = lobbies;
+})
+
 </script>
 
 <template>
   <div class="cont">
-    <button @click="onClick('1')">unirse a un room</button>
-    <button @click="onClick('2')">unirse a un room</button>
+    <p class="lobby" @click="() => joinLobby(texto.id)" v-for="(texto, index) in lobbys" :key="texto.id">
+      {{ texto.id }}   -   Jugadores: {{ texto.users }}/6
+    </p>
   </div>
-  <Footer />
+  <div class="buttons-cont">
+    <input type="text" v-model="lobbyName" />
+    <button @click="() => addLobby(lobbyName)">crear lobby</button>
+    <button @click="() => exitLobby(lobbyName)">salir lobby</button>
+    <button @click="() => getCurrentLobbies()">obtener lobbys actuales</button>
+  </div>
 </template>
 
 <style scoped>
 .cont {
-  position: absolute;
+  flex-direction: column;
+  gap: 10px;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 80%;
-  height: 80%;
-  border: 1px solid #000;
-  background: #333;
+  padding: 20px;
+  color: #fff;
+  width: 400px;
+  height: 700px;
+  margin: auto;
+  margin-top: 10px;
+  border: 1px solid #fff;
+  background: #000000;
+}
+
+.buttons-cont {
+  width: 400px;
+  margin: auto;
+  margin-top: 20px;
+}
+
+.lobby {
+  background: #444;
+  padding: 5px;
+  border: 1px solid #fff;
 }
 </style>
