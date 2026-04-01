@@ -19,11 +19,8 @@
 
 <style scoped>
 .footer {
-  position: absolute;
   margin: auto;
-  bottom: 0;
-  left: 0;
-  right: 0;
+
   width: 90%;
   border-top: var(--border-thick) solid var(--color-black);
   padding-top: var(--space-8);

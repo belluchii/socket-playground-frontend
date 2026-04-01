@@ -2,6 +2,7 @@
 import { io } from 'socket.io-client'
 import { ref } from 'vue'
 import Footer from './components/Footer.vue'
+import Nav from './components/Nav.vue'
 
 const socket = io('http://localhost:3001', {
   transports: ['websocket'],
@@ -42,6 +43,7 @@ socket.on('lobbiesList', (lobbies) => {
 </script>
 
 <template>
+  <Nav />
   <div class="cont">
     <p
       class="lobby"
@@ -69,7 +71,7 @@ socket.on('lobbiesList', (lobbies) => {
   padding: 20px;
   color: #fff;
   width: 400px;
-  height: 700px;
+  height: 400px;
   margin: auto;
   margin-top: 10px;
   border: 1px solid #fff;
