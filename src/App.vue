@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { io } from 'socket.io-client'
 import { ref } from 'vue'
+import Footer from './components/Footer.vue'
 
 const socket = io('http://localhost:3001', {
   transports: ['websocket'],
@@ -57,6 +58,7 @@ socket.on('lobbiesList', (lobbies) => {
     <button @click="() => exitLobby(lobbyName)">salir lobby</button>
     <button @click="() => getCurrentLobbies()">obtener lobbys actuales</button>
   </div>
+  <Footer />
 </template>
 
 <style scoped>
