@@ -1,7 +1,10 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import Divider from '@/common/Divider.vue'
+</script>
 
 <template>
   <footer class="footer">
+    <Divider />
     <div class="footer-inner">
       <div class="footer-left">
         <p class="footer-label">Kinetic playground</p>
@@ -21,9 +24,10 @@
 .footer {
   margin: auto;
   width: 90%;
-  border-top: var(--border-thick) solid var(--color-black);
-  padding-top: var(--space-8);
-  padding-bottom: var(--space-8);
+}
+
+.footer > * {
+  padding: var(--space-2);
 }
 
 .footer-inner {
