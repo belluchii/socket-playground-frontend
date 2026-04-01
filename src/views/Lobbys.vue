@@ -68,7 +68,7 @@ const rows = computed(() =>
 </script>
 
 <template>
-  <main class="page">
+  <main>
     <Table :columns="columns" :rows="rows">
       <!-- Celda players con badge -->
       <template #cell-players="{ row }">
@@ -113,11 +113,10 @@ const rows = computed(() =>
 </template>
 
 <style scoped>
-.page {
+main {
   max-width: 1200px;
-  min-height: 87dvh;
   width: 90%;
-  margin: 0 auto;
+  margin: 50px auto;
   padding-top: calc(var(--space-24) + var(--space-8));
   padding-bottom: var(--space-16);
 }
