@@ -20,7 +20,6 @@
 <style scoped>
 .footer {
   margin: auto;
-
   width: 90%;
   border-top: var(--border-thick) solid var(--color-black);
   padding-top: var(--space-8);
