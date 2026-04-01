@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { join } from 'path'
 import { io } from 'socket.io-client'
 import { ref } from 'vue'
 
@@ -7,34 +8,54 @@ const socket = io('http://localhost:3001', {
   reconnection: true,
 })
 
-socket.on('connect', () => console.log(`Hola de nuevo id: ${socket.id}`))
+socket.on('connect', () => {
+  console.log(`Hola de nuevo id: ${socket.id}`)
+  socket.emit('getLobbies');
+  })
 
 const lobbyName = ref('')
-let lobbys = ref(['lobby1', 'lobby2'])
+let lobbys = ref<{ id: string; users: number }[]>([])
 
-function addLobby(lobby: string) {
-  if (lobby != '') lobbys.value.push(lobby)
-}
 
 function joinLobby(lobby: string) {
-  console.log(lobby)
+  socket.emit('joinLobby', lobby);
 }
 
-function exitLobby() {
-  console.log('saliste del lobby')
+function addLobby(lobby: string) {
+  if (lobby != '') joinLobby(lobby);
 }
+
+
+function exitLobby(lobby: string) {
+  socket.emit('exitLobby', lobby);
+}
+
+function getCurrentLobbies() {
+  socket.emit('getCurrentLobbies');
+}
+
+socket.on('joinedLobby', (texto) => {
+  console.log(texto);
+
+})
+
+socket.on('lobbiesList', (lobbies) => {
+  lobbys.value = lobbies;
+})
+
 </script>
 
 <template>
   <div class="cont">
-    <p class="lobby" @click="() => joinLobby(texto)" v-for="(texto, index) in lobbys" :key="index">
-      {{ texto }}
+    <p class="lobby" @click="() => joinLobby(texto.id)" v-for="(texto, index) in lobbys" :key="texto.id">
+      {{ texto.id }}   -   Jugadores: {{ texto.users }}/6
     </p>
   </div>
   <div class="buttons-cont">
     <input type="text" v-model="lobbyName" />
     <button @click="() => addLobby(lobbyName)">crear lobby</button>
-    <button @click="() => exitLobby()">salir lobby</button>
+    <button @click="() => exitLobby(lobbyName)">salir lobby</button>
+    <button @click="() => getCurrentLobbies()">obtener lobbys actuales</button>
   </div>
 </template>
 
