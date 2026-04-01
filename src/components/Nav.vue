@@ -1,47 +1,48 @@
 <script setup lang="ts">
 import Button from '@/common/Button.vue'
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 interface NavLink {
   label: string
   to: string
 }
 
-interface Props {
-  links?: NavLink[]
-  logoText?: string
-  ctaText?: string
-}
+const router = useRouter()
 
-withDefaults(defineProps<Props>(), {
-  links: () => [
-    { label: 'Work', to: '/work' },
-    { label: 'About', to: '/about' },
-    { label: 'Archive', to: '/archive' },
-    { label: 'Contact', to: '/contact' },
-  ],
-  logoText: 'KINETIC',
-  ctaText: 'Open →',
-})
+const links: NavLink[] = [
+  { label: 'Work', to: '/work' },
+  { label: 'About', to: '/about' },
+  { label: 'Archive', to: '/archive' },
+  { label: 'Contact', to: '/contact' },
+]
 
-defineEmits<{
-  'logo-click': []
-  'cta-click': []
-}>()
-
-const isOpen = ref(false)
+const logoText = 'KINETIC'
+const ctaText = '✦ open'
+const isOpen = ref<boolean>(false)
 
 const toggleMenu = (): void => {
   isOpen.value = !isOpen.value
+}
+
+const goHome = (): void => {
+  router.push('/')
+}
+
+const handleCta = (): void => {
+  // Tu lógica de CTA acá
+  console.log('CTA clicked')
+}
+
+const closeMobileMenu = (): void => {
+  isOpen.value = false
 }
 </script>
 
 <template>
   <nav class="nav">
     <div class="nav-inner">
-      <div class="nav-logo" @click="$emit('logo-click')">
-        {{ logoText }}<span class="nav-logo-dot">.</span>
-      </div>
+      <div class="nav-logo" @click="goHome">{{ logoText }}<span class="nav-logo-dot">.</span></div>
 
       <div class="nav-links">
         <router-link
@@ -56,9 +57,9 @@ const toggleMenu = (): void => {
       </div>
 
       <div class="nav-action">
-        <slot name="action">
-          <Button variant="secondary" size="sm">✦ open</Button>
-        </slot>
+        <Button variant="secondary" size="sm" @click="handleCta">
+          {{ ctaText }}
+        </Button>
       </div>
 
       <!-- Mobile hamburger -->
@@ -78,14 +79,14 @@ const toggleMenu = (): void => {
           :to="link.to"
           class="nav-mobile-link"
           active-class="active"
-          @click="isOpen = false"
+          @click="closeMobileMenu"
         >
           {{ link.label }}
         </router-link>
         <div class="nav-mobile-action">
-          <slot name="mobile-action">
-            <Button variant="secondary" size="sm">✦ open</Button>
-          </slot>
+          <Button variant="secondary" block @click="(handleCta(), closeMobileMenu())">
+            {{ ctaText }}
+          </Button>
         </div>
       </div>
     </Transition>
@@ -238,7 +239,6 @@ const toggleMenu = (): void => {
   transform-origin: center;
 }
 
-/* Animación X */
 .hamburger-line.open:nth-child(1) {
   transform: translateY(8px) rotate(45deg);
 }

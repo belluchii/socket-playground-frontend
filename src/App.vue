@@ -3,6 +3,7 @@ import { io } from 'socket.io-client'
 import { ref } from 'vue'
 import Footer from './components/Footer.vue'
 import Nav from './components/Nav.vue'
+import Badge from './common/Badge.vue'
 
 const socket = io('http://localhost:3001', {
   transports: ['websocket'],
