@@ -12,6 +12,11 @@ const routes: RouteRecordRaw[] = [
     name: 'Lobbys',
     component: () => import('@/views/Lobbys.vue'),
   },
+  {
+    path: '/Game/TicTacToe',
+    name: 'TicTacToe',
+    component: () => import('@/views/TicTacToe.vue'),
+  },
 ]
 
 const router = createRouter({
