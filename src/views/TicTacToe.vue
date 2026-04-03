@@ -2,14 +2,58 @@
     import { ref } from 'vue';
     import { io, Socket } from 'socket.io-client';
 
-    // const socket: Socket = io('http://localhost:3001');
-
-    // socket.on('connect', () => {
-    //     console.log('Connected to server');
-    // });
-
+    let typeP: string = '';
     const celdas = ref<(string | null)[]>(Array(9).fill(null));
-    const turno = ref<string>('X');
+    let sId:string = '';
+
+
+    const socket = io('http://localhost:3001', {
+    transports: ['websocket'],
+    reconnection: true,
+    })
+
+    socket.on('connect', () => {
+        console.log('Connected to server');
+        sId = socket.id!;
+        socket.emit("JoinRoom");
+        socket.emit("RequestType", sId);
+    });
+
+    socket.on("AskType", () => {
+        socket.emit("SendType", typeP, sId);
+    });
+
+    socket.on("ReceivedType", (type: string) => {
+        GiveType(type || '');
+    });
+
+    socket.on("PlaceMarked", (index:number, typeP:string) => {
+        celdas.value[index] = typeP;
+        checkWin(index);
+    });
+
+    socket.on("GameOver", (type:string) => {
+        if (type === "Draw") {
+            alert("It's a draw!");
+        } else {
+            alert(`Player ${type} wins!`);
+        }
+    });
+
+    function GiveType(type: string) {
+        if (type === '') {
+            typeP=Math.floor(Math.random() * (2)) === 0 ? 'X' : 'O';
+        }
+        else if (type === 'X') {
+            typeP = 'O';
+        }
+        else if (type === 'O') {
+            typeP = 'X';
+        }
+        return;
+    }
+
+    // const turno = ref<string>('X');
     
     function checkWin(index: number) {
         let type = celdas.value[index];
@@ -30,11 +74,11 @@
             }
         }
         if (b===1){
-            alert(`¡Jugador ${type} gana!`);
+            socket.emit("GameOver", type, sId);
             celdas.value = Array(9).fill(null);
         }
         else if (!celdas.value.includes(null)) {
-            alert('¡Empate!');
+            socket.emit("GameOver", "Draw", sId);
             celdas.value = Array(9).fill(null);
         }
         return;
@@ -42,11 +86,8 @@
 
     function MarkPlace(index: number) {
         if (celdas.value[index] !== null) return;
-        
-        celdas.value[index] = turno.value;
-        turno.value = turno.value === 'X' ? 'O' : 'X';
-        
-        checkWin(index);
+        socket.emit("MarkPlace", index, typeP);   
+        // typeP = typeP === 'X' ? 'O' : 'X';
     }
 </script>
 
@@ -112,39 +153,43 @@
         background-color: var(--color-red);
         background-origin:content-box;
         background-image:
-        /* Línea \ */
+        linear-gradient(45deg, transparent 90%, var(--color-red) 90%),
+        linear-gradient(135deg, transparent 90%, var(--color-red) 90%),
+        linear-gradient(-45deg, transparent 90%, var(--color-red) 90%),
+        linear-gradient(-135deg, transparent 90%, var(--color-red) 90%),
         linear-gradient(
             45deg,
             transparent 43%,
-            rgba(255, 255, 255, 0.4) 43%,
-            rgba(255, 255, 255, 0.4) 57%,
+            var(--color-white) 43%,
+            var(--color-white) 57%,
             transparent 57%
-        ),
-        /* Línea / */
+        )
+        ,
         linear-gradient(
             -45deg,
             transparent 43%,
-            rgba(255, 255, 255, 0.4) 43%,
-            rgba(255, 255, 255, 0.4) 57%,
+            var(--color-white) 43%,
+            var(--color-white) 57%,
             transparent 57%
-        );
-    background-size: 60% 60%;       /* Tamaño de la X */
-    background-repeat: no-repeat;
-    background-position: center;
+        )
+        ;
+        background-size: 60% 60%;
+        background-repeat: no-repeat;
+        background-position: center;
         cursor:not-allowed;
-    }
+        
+        }
     .celda.player-o {
         background-color: var(--color-blue);
         background-image:
+            radial-gradient(circle at center, var(--color-blue) 0%, var(--color-blue) 25%, transparent 26%),
             radial-gradient(
                 circle,
-                transparent 25%,
-                rgba(255, 255, 255, 0.4) 25%,
-                rgba(255, 255, 255, 0.4) 35%,
-                transparent 35%
-        );
-        background-size: 100% 100%;
-        background-repeat: no-repeat;
+                var(--color-white) 32%,
+                transparent 33%
+            )
+            ;
+        background-size: 150% 100%;
         background-position: center;
         cursor: not-allowed;
     }
