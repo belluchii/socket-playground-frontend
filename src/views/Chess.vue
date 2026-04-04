@@ -1,16 +1,21 @@
 <script setup lang="ts">
 import {
   board,
+  createPiece,
   getValidMoves,
   isInCheck,
   isInCheckMate,
+  isInsufficientMaterial,
+  isStalemate,
   movePiece,
   pieceSymbols,
   setBoard,
+  setSquare,
 } from '@/utils/chess'
 import type { Piece } from '@/utils/chess'
 import ChessSquare from '@/components/ChessSquare.vue'
 import ChessPiece from '@/components/ChessPiece.vue'
+import PromotionModal from '@/components/PromotionModal.vue'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 setBoard()
@@ -18,6 +23,7 @@ setBoard()
 const highlightedMoves = ref<[number, number][]>([])
 const dragPiece = ref<{ type: Piece['type']; team: Piece['team'] } | null>(null)
 const fromRef = ref<[number, number] | null>(null)
+const promotionPending = ref<{ row: number; col: number; team: Piece['team'] } | null>(null)
 let from: [number, number] | null = null
 let currentTeam: 'white' | 'black' = 'white'
 let drag = false
@@ -34,7 +40,37 @@ function endDrag() {
   drag = false
 }
 
+function checkAfterMove() {
+  currentTeam = currentTeam === 'white' ? 'black' : 'white'
+  const opponent = currentTeam
+
+  if (isInsufficientMaterial()) {
+    alert('Empate por falta de material')
+    return
+  }
+
+  if (isInCheck(opponent, null, null)) {
+    if (isInCheckMate(opponent)) {
+      const winner = opponent === 'white' ? 'black' : 'white'
+      alert(`¡Jaque mate! Gana ${winner}`)
+    } else {
+      alert(`¡Jaque al rey ${opponent}!`)
+    }
+  } else if (isStalemate(opponent)) {
+    alert('Empate por ahogado')
+  }
+}
+
+function handlePromotion(type: Piece['type']) {
+  if (!promotionPending.value) return
+  const { row, col, team } = promotionPending.value
+  setSquare(row, col, createPiece(type, team))
+  promotionPending.value = null
+  checkAfterMove()
+}
+
 function startMove(row: number, col: number) {
+  if (promotionPending.value) return
   startDrag()
   const piece = board[row]?.[col]
   if (!piece || piece.team !== currentTeam) return
@@ -50,7 +86,7 @@ function endMove(row: number, col: number) {
   endDrag()
   dragPiece.value = null
   fromRef.value = null
-  if (!from) return
+  if (!from || promotionPending.value) return
 
   const [fromRow, fromCol] = from
 
@@ -64,17 +100,13 @@ function endMove(row: number, col: number) {
   const move = movePiece(fromRow, fromCol, row, col)
   if (!move) return
 
-  currentTeam = currentTeam === 'white' ? 'black' : 'white'
-
-  const opponent = currentTeam
-  if (isInCheck(opponent, null, null)) {
-    if (isInCheckMate(opponent)) {
-      const winner = opponent === 'white' ? 'black' : 'white'
-      alert(`¡Jaque mate! Gana ${winner}`)
-    } else {
-      alert(`¡Jaque al rey ${opponent}!`)
-    }
+  const piece = board[row]?.[col]
+  if (piece?.type === 'pawn' && (row === 0 || row === 7)) {
+    promotionPending.value = { row, col, team: piece.team }
+    return
   }
+
+  checkAfterMove()
 }
 
 function onMouseMove(e: MouseEvent) {
@@ -135,6 +167,12 @@ onBeforeUnmount(() => {
   >
     {{ pieceSymbols[dragPiece.type][dragPiece.team] }}
   </div>
+
+  <PromotionModal
+    v-if="promotionPending"
+    :team="promotionPending.team"
+    @promote="handlePromotion"
+  />
 </template>
 
 <style>

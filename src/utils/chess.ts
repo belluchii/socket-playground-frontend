@@ -189,6 +189,51 @@ export function isInCheckMate(team: 'white' | 'black'): boolean {
   return true
 }
 
+export function isStalemate(team: 'white' | 'black'): boolean {
+  if (isInCheck(team, null, null)) return false
+
+  for (let r = 0; r < boardLength; r++) {
+    for (let c = 0; c < boardLength; c++) {
+      const piece = board[r]?.[c]
+      if (!piece || piece.team !== team) continue
+      if (getValidMoves(r, c, piece).length > 0) return false
+    }
+  }
+
+  return true
+}
+
+export function isInsufficientMaterial(): boolean {
+  const pieces: Piece[] = []
+  board.forEach((row) =>
+    row.forEach((p) => {
+      if (p) pieces.push(p)
+    }),
+  )
+
+  if (pieces.length === 2) return true
+
+  if (pieces.length === 3) {
+    const minor = pieces.find((p) => p.type === 'bishop' || p.type === 'knight')
+    if (minor) return true
+  }
+
+  if (pieces.length === 4) {
+    const bishops = pieces.filter((p) => p.type === 'bishop')
+    if (bishops.length === 2 && bishops[0]!.team !== bishops[1]!.team) {
+      const bishopSquares: number[] = []
+      board.forEach((row, r) =>
+        row.forEach((p, c) => {
+          if (p?.type === 'bishop') bishopSquares.push((r + c) % 2)
+        }),
+      )
+      if (bishopSquares[0] === bishopSquares[1]) return true
+    }
+  }
+
+  return false
+}
+
 export function getPawnMoves(
   row: number,
   col: number,
