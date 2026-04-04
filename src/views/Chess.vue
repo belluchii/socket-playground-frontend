@@ -16,14 +16,34 @@ import type { Piece } from '@/utils/chess'
 import ChessSquare from '@/components/ChessSquare.vue'
 import ChessPiece from '@/components/ChessPiece.vue'
 import PromotionModal from '@/components/PromotionModal.vue'
+import { useChessSocket } from '@/composables/useChessSocket'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 setBoard()
+
+const {
+  connect,
+  joinRoom,
+  requestTeam,
+  sendTeam,
+  emitMove,
+  emitPromotion,
+  onGameStart,
+  onPieceMoved,
+  onPiecePromoted,
+  onReceivedTeam,
+  onAskTeam,
+  onGameOver,
+  onPlayerLeft,
+  getId,
+} = useChessSocket()
 
 const highlightedMoves = ref<[number, number][]>([])
 const dragPiece = ref<{ type: Piece['type']; team: Piece['team'] } | null>(null)
 const fromRef = ref<[number, number] | null>(null)
 const promotionPending = ref<{ row: number; col: number; team: Piece['team'] } | null>(null)
+const waitingForPlayer = ref(true)
+let myTeam: 'white' | 'black' | null = null
 let from: [number, number] | null = null
 let currentTeam: 'white' | 'black' = 'white'
 let drag = false
@@ -65,12 +85,14 @@ function handlePromotion(type: Piece['type']) {
   if (!promotionPending.value) return
   const { row, col, team } = promotionPending.value
   setSquare(row, col, createPiece(type, team))
+  emitPromotion(row, col, type)
   promotionPending.value = null
   checkAfterMove()
 }
 
 function startMove(row: number, col: number) {
   if (promotionPending.value) return
+  if (myTeam && currentTeam !== myTeam) return
   startDrag()
   const piece = board[row]?.[col]
   if (!piece || piece.team !== currentTeam) return
@@ -99,6 +121,8 @@ function endMove(row: number, col: number) {
 
   const move = movePiece(fromRow, fromCol, row, col)
   if (!move) return
+
+  emitMove(fromRow, fromCol, row, col)
 
   const piece = board[row]?.[col]
   if (piece?.type === 'pawn' && (row === 0 || row === 7)) {
@@ -129,6 +153,51 @@ const squares = Array.from({ length: 64 }, (_, i) => ({
 onMounted(() => {
   window.addEventListener('mousemove', onMouseMove)
   window.addEventListener('scroll', onScroll)
+
+  connect()
+  joinRoom()
+
+  onGameStart(() => {
+    waitingForPlayer.value = false
+    requestTeam(getId()!)
+  })
+
+  onAskTeam(() => {
+    const team = Math.random() > 0.5 ? 'white' : 'black'
+    myTeam = team
+    currentTeam = 'white'
+    sendTeam(team, getId()!)
+  })
+
+  onReceivedTeam((team) => {
+    if (team === '') return
+    myTeam = team === 'white' ? 'black' : 'white'
+    currentTeam = 'white'
+  })
+
+  onPieceMoved((fromRow, fromCol, toRow, toCol) => {
+    const move = movePiece(fromRow, fromCol, toRow, toCol)
+    if (!move) return
+    const piece = board[toRow]?.[toCol]
+    if (piece?.type === 'pawn' && (toRow === 0 || toRow === 7)) {
+      promotionPending.value = { row: toRow, col: toCol, team: piece.team }
+      return
+    }
+    checkAfterMove()
+  })
+
+  onPiecePromoted((row, col, type) => {
+    setSquare(row, col, createPiece(type, board[row]?.[col]?.team ?? 'white'))
+    checkAfterMove()
+  })
+
+  onGameOver((result) => {
+    alert(result)
+  })
+
+  onPlayerLeft(() => {
+    alert('El otro jugador se desconectó')
+  })
 })
 
 onBeforeUnmount(() => {
@@ -139,7 +208,8 @@ onBeforeUnmount(() => {
 
 <template>
   <main>
-    <div class="chess-board">
+    <div v-if="waitingForPlayer" class="waiting">Esperando al otro jugador...</div>
+    <div class="chess-board" :class="{ disabled: waitingForPlayer }">
       <ChessSquare
         v-for="square in squares"
         :key="`${square.row}-${square.col}`"
@@ -182,6 +252,13 @@ main {
   max-width: 1200px;
 }
 
+.waiting {
+  text-align: center;
+  font-size: 1.2rem;
+  margin-bottom: 1rem;
+  color: var(--color-text-secondary);
+}
+
 .chess-board {
   user-select: none;
   width: 800px;
@@ -191,6 +268,11 @@ main {
   margin: auto;
   box-shadow: var(--shadow-hard-lg);
   border: var(--border-thick) solid var(--color-black);
+}
+
+.chess-board.disabled {
+  pointer-events: none;
+  opacity: 0.6;
 }
 
 .drag-ghost {
