@@ -1,14 +1,27 @@
 import { reactive } from 'vue'
 
+// Represents a chess piece with its type, team, and movement state.
+// Used by: ChessSquare component for rendering, movePiece for move validation.
+// Connects to: pieceSymbols for display, board array for game state.
 export interface Piece {
   type: 'rook' | 'knight' | 'bishop' | 'queen' | 'king' | 'pawn'
   team: 'black' | 'white'
   hasMoved: boolean
 }
 
+// Represents a single square on the chess board.
+// Can contain a Piece or be empty (null).
+// Used by: board array to store game state, setBoard for state updates.
 export type Square = Piece | null
+
+// Snapshot of the board state at a specific moment.
+// Used by: movePiece to validate moves without changing board, getValidMoves for simulation.
+// Connects to: movePiece (undo invalid moves), isInCheck (check validation).
 export type BoardSnapshot = (Square | null)[][]
 
+// Unicode symbols for each piece type and team.
+// Used by: ChessPiece component to display pieces on the board.
+// Connects to: ChessPiece template to render piece characters.
 export const pieceSymbols: Record<Piece['type'], Record<Piece['team'], string>> = {
   king: { white: '♔', black: '♚' },
   queen: { white: '♕', black: '♛' },
@@ -18,42 +31,84 @@ export const pieceSymbols: Record<Piece['type'], Record<Piece['team'], string>> 
   pawn: { white: '♙', black: '♟' },
 }
 
+// Standard chess board dimensions.
+// Used by: setBoard, getValidMoves, and all piece movement functions to iterate the board.
 export const boardLength: number = 8
+
+// Reactive 8x8 board representing the current game state.
+// Used by: ChessSquare, ChessPiece components for rendering, movePiece for updates.
+// Connects to: setBoard (initialize), movePiece (update), setSquare (modify individual squares).
 export const board = reactive<Square[][]>(
   Array.from({ length: boardLength }, () => Array.from({ length: boardLength }, () => null)),
 )
 
+// Stores the target square for en passant capture.
+// Used by: getPawnMoves to include en passant moves, movePiece to handle en passant logic.
+// Connects to: getPawnMoves (en passant detection), movePiece (en passant capture).
 export let enPassantTarget: [number, number] | null = null
 
-export function setBoard() {
-  const backRank: Piece['type'][] = [
-    'rook',
-    'knight',
-    'bishop',
-    'queen',
-    'king',
-    'bishop',
-    'knight',
-    'rook',
-  ]
-  for (let col = 0; col < boardLength; col++) {
-    setSquare(0, col, createPiece(backRank[col]!, 'black'))
-    setSquare(1, col, createPiece('pawn', 'black'))
-    setSquare(6, col, createPiece('pawn', 'white'))
-    setSquare(7, col, createPiece(backRank[col]!, 'white'))
+// Initializes or updates the board with given state or standard starting position.
+// Used by: Chess.vue on mount and on GameState event from server.
+// Connects to: createPiece (create pieces), setSquare (place pieces on board).
+export function setBoard(state?: (Square | null)[][] | null) {
+  for (let row = 0; row < boardLength; row++) {
+    for (let col = 0; col < boardLength; col++) {
+      const rowArr = board[row]
+      if (rowArr) rowArr[col] = null
+    }
+  }
+  if (state) {
+    for (let row = 0; row < boardLength; row++) {
+      for (let col = 0; col < boardLength; col++) {
+        const stateRow = state[row]
+        const piece = stateRow?.[col]
+        if (piece) {
+          const boardRow = board[row]
+          if (boardRow) {
+            boardRow[col] = { type: piece.type, team: piece.team, hasMoved: piece.hasMoved }
+          }
+        }
+      }
+    }
+  } else {
+    const backRank: Piece['type'][] = [
+      'rook',
+      'knight',
+      'bishop',
+      'queen',
+      'king',
+      'bishop',
+      'knight',
+      'rook',
+    ]
+    for (let col = 0; col < boardLength; col++) {
+      setSquare(0, col, createPiece(backRank[col]!, 'black'))
+      setSquare(1, col, createPiece('pawn', 'black'))
+      setSquare(6, col, createPiece('pawn', 'white'))
+      setSquare(7, col, createPiece(backRank[col]!, 'white'))
+    }
   }
 }
 
+// Creates a new piece with default hasMoved=false.
+// Used by: setBoard to initialize pieces, handlePromotion to create promoted piece.
+// Connects to: setSquare to place the piece on the board.
 export function createPiece(type: Piece['type'], team: Piece['team']): Piece {
   return { type, team, hasMoved: false }
 }
 
+// Sets a piece at the specified board position.
+// Used by: setBoard, movePiece, handlePromotion to update board state.
+// Connects to: board array (reactive state).
 export function setSquare(row: number, col: number, piece: Piece | null) {
   if (!board[row]) return
   board[row][col] = piece
   return board[row][col]
 }
 
+// Executes a move if valid, handles special moves like castling and en passant.
+// Used by: Chess.vue endMove function when player releases a piece.
+// Connects to: getValidMoves (validate), isInCheck (undo if self-check), enPassantTarget (en passant).
 export function movePiece(fromRow: number, fromCol: number, toRow: number, toCol: number) {
   const piece = board[fromRow]?.[fromCol]
   if (!piece) return
@@ -97,6 +152,9 @@ export function movePiece(fromRow: number, fromCol: number, toRow: number, toCol
   return move
 }
 
+// Gets all valid moves for a piece, filtering moves that leave king in check.
+// Used by: movePiece to validate moves, Chess.vue startMove to highlight possible moves.
+// Connects to: getPawnMoves, getRookMoves, getKnightMoves, getBishopMoves, getQueenMoves, getKingMoves.
 export function getValidMoves(
   row: number,
   col: number,
@@ -137,10 +195,17 @@ export function getValidMoves(
 
   return moves
 }
+
+// Gets the position of the king for the given team.
+// Used by: isInCheckMate to find king position, isInCheck to verify check state.
+// Connects to: getKingOnBoard (board-specific lookup).
 export function getKing(team: 'white' | 'black'): [number, number] | null {
   return getKingOnBoard(team, board)
 }
 
+// Gets the position of the king on a specific board snapshot.
+// Used by: isInCheck to find attacked king, getKing for default board.
+// Connects to: isInCheck (king detection), isInCheckMate (mate verification).
 export function getKingOnBoard(team: 'white' | 'black', b: BoardSnapshot): [number, number] | null {
   for (let r = 0; r < boardLength; r++)
     for (let c = 0; c < boardLength; c++)
@@ -148,6 +213,9 @@ export function getKingOnBoard(team: 'white' | 'black', b: BoardSnapshot): [numb
   return null
 }
 
+// Checks if the king of the given team is in check.
+// Used by: movePiece to undo self-check moves, isInCheckMate for verification.
+// Connects to: getKingOnBoard (find king), getValidMoves (enemy piece attacks).
 export function isInCheck(
   team: 'white' | 'black',
   pos: [number, number] | null,
@@ -167,6 +235,10 @@ export function isInCheck(
     }),
   )
 }
+
+// Checks if the given team has no valid moves and is in check (checkmate).
+// Used by: Chess.vue checkAfterMove to detect win condition.
+// Connects to: getKing (find king), isInCheck (verify check state), getValidMoves (all possible moves).
 export function isInCheckMate(team: 'white' | 'black'): boolean {
   const kingPos = getKing(team)
   if (!kingPos) return false
@@ -189,6 +261,9 @@ export function isInCheckMate(team: 'white' | 'black'): boolean {
   return true
 }
 
+// Checks if the given team has no valid moves but is not in check (stalemate).
+// Used by: Chess.vue checkAfterMove to detect draw condition.
+// Connects to: isInCheck (exclude check), getValidMoves (no moves available).
 export function isStalemate(team: 'white' | 'black'): boolean {
   if (isInCheck(team, null, null)) return false
 
@@ -203,6 +278,9 @@ export function isStalemate(team: 'white' | 'black'): boolean {
   return true
 }
 
+// Checks if the board has insufficient material for checkmate.
+// Used by: Chess.vue checkAfterMove to detect draw condition.
+// Connects to: board array (piece count analysis).
 export function isInsufficientMaterial(): boolean {
   const pieces: Piece[] = []
   board.forEach((row) =>
@@ -234,6 +312,9 @@ export function isInsufficientMaterial(): boolean {
   return false
 }
 
+// Gets all possible pawn moves including forward, diagonal captures, and en passant.
+// Used by: getValidMoves to calculate piece-specific movements.
+// Connects to: enPassantTarget (en passant detection), getValidMoves (final validation).
 export function getPawnMoves(
   row: number,
   col: number,
@@ -263,6 +344,9 @@ export function getPawnMoves(
   return moves
 }
 
+// Gets all possible rook moves in horizontal and vertical directions.
+// Used by: getValidMoves to calculate piece-specific movements, queen combines with bishop.
+// Connects to: getValidMoves (final validation), isInCheck (attack detection).
 export function getRookMoves(
   row: number,
   col: number,
@@ -289,6 +373,9 @@ export function getRookMoves(
   return moves
 }
 
+// Gets all possible bishop moves in diagonal directions.
+// Used by: getValidMoves to calculate piece-specific movements, queen combines with rook.
+// Connects to: getValidMoves (final validation), isInCheck (attack detection).
 export function getBishopMoves(
   row: number,
   col: number,
@@ -315,6 +402,9 @@ export function getBishopMoves(
   return moves
 }
 
+// Gets all possible knight moves in L-shape pattern.
+// Used by: getValidMoves to calculate piece-specific movements.
+// Connects to: getValidMoves (final validation), isInCheck (attack detection).
 export function getKnightMoves(
   row: number,
   col: number,
@@ -342,6 +432,9 @@ export function getKnightMoves(
   return moves
 }
 
+// Gets all possible king moves including castling (when enabled).
+// Used by: getValidMoves to calculate piece-specific movements.
+// Connects to: isInCheck (castling validation), getValidMoves (final validation).
 export function getKingMoves(
   row: number,
   col: number,

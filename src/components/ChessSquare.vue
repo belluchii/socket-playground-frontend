@@ -1,10 +1,15 @@
 <script setup lang="ts">
+// Props for ChessSquare component.
+// Used by: template to render square with correct styling and handle mouse events.
+// Connects to: template :class, @mouseup event.
 interface Props {
   row: number
   col: number
   highlighted: boolean
 }
 
+// Props are used in template for styling (chessboard pattern, highlight).
+// Connects to: Chess.vue endMove via slot projection.
 defineProps<Props>()
 </script>
 

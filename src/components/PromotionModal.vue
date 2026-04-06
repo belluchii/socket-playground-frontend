@@ -1,8 +1,18 @@
 <script setup lang="ts">
+// Piece symbols for displaying promotion options.
+// Used by: template to show available piece choices.
+// Connects to: chess.ts pieceSymbols.
 import { pieceSymbols } from '@/utils/chess'
 import type { Piece } from '@/utils/chess'
 
+// Team of the pawn being promoted (determines piece color).
+// Used by: template to display correct colored pieces.
+// Connects to: template pieceSymbols[team].
 defineProps<{ team: Piece['team'] }>()
+
+// Emits selected promotion piece type.
+// Used by: handlePromotion in Chess.vue to complete promotion.
+// Connects to: Chess.vue handlePromotion function.
 const emit = defineEmits<{ promote: [type: Piece['type']] }>()
 </script>
 
