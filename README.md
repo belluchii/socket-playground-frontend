@@ -1,54 +1,194 @@
-# ./
+# WebSocket Playground - Frontend
 
-This template should help get you started developing with Vue 3 in Vite.
+Vue 3 client for real-time multiplayer games.
 
-## Recommended IDE Setup
+## Overview
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+Frontend application built with **Vue 3**, **Vite**, and **Socket.io Client** for real-time multiplayer gaming.
 
-## Recommended Browser Setup
+## Quick Start
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
-
-## Type Support for `.vue` Imports in TS
-
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
-
-```sh
+```bash
+# Install dependencies
 bun install
+
+# Run development server
+bun run dev
 ```
 
-### Compile and Hot-Reload for Development
+Frontend runs on `http://localhost:5173` (default Vite port).
 
-```sh
-bun dev
+## Project Structure
+
+```
+ws-playground-front/
+├── src/
+│   ├── views/
+│   │   ├── Chess.vue          # Chess game view
+│   │   ├── TicTacToe.vue      # TicTacToe game view
+│   │   ├── Home.vue           # Home page
+│   │   ├── Lobbys.vue         # Lobby browser
+│   │   └── ...
+│   ├── components/
+│   │   ├── ChessSquare.vue    # Chess board square
+│   │   ├── ChessPiece.vue    # Chess piece
+│   │   ├── PromotionModal.vue # Pawn promotion UI
+│   │   └── ...
+│   ├── composables/
+│   │   ├── useChessSocket.ts  # Chess socket logic
+│   │   └── ...
+│   ├── utils/
+│   │   ├── chess.ts          # Chess game logic
+│   │   └── socket.ts         # General socket utils
+│   ├── common/               # Reusable UI components
+│   ├── router/               # Vue Router config
+│   ├── App.vue               # Root component
+│   └── main.ts               # Entry point
+├── package.json
+├── vite.config.ts
+└── tsconfig.json
 ```
 
-### Type-Check, Compile and Minify for Production
+## Available Scripts
 
-```sh
-bun run build
+| Script               | Description               |
+| -------------------- | ------------------------- |
+| `bun run dev`        | Start dev server with HMR |
+| `bun run build`      | Build for production      |
+| `bun run preview`    | Preview production build  |
+| `bun run type-check` | TypeScript checking       |
+| `bun run lint`       | Run all linters           |
+| `bun run test:unit`  | Run unit tests            |
+
+## Games
+
+### Chess
+
+Multiplayer chess game with the following features:
+
+- Drag-and-drop piece movement
+- Valid move highlighting
+- Turn-based gameplay
+- Pawn promotion
+- Check/checkmate detection
+- Stalemate detection
+- Server-side state synchronization
+
+**Chess Components:**
+
+- `Chess.vue` - Main game view
+- `ChessSquare.vue` - Board square
+- `ChessPiece.vue` - Piece display
+- `PromotionModal.vue` - Promotion selection
+
+**Chess Utilities:**
+
+- `chess.ts` - Board state, piece movement, validation
+- `useChessSocket.ts` - Socket communication
+
+### TicTacToe
+
+Simple multiplayer TicTacToe.
+
+## Adding a New Game
+
+1. **Create the view:**
+
+```vue
+<!-- src/views/YourGame.vue -->
+<script setup lang="ts">
+import { onMounted } from 'vue'
+import { useYourGameSocket } from '@/composables/useYourGameSocket'
+
+const { connect, joinRoom, onGameState } = useYourGameSocket()
+
+onMounted(() => {
+  connect()
+  joinRoom('roomId')
+
+  onGameState((data) => {
+    // Handle game state
+  })
+})
+</script>
+
+<template>
+  <!-- Your game UI -->
+</template>
 ```
 
-### Run Unit Tests with [Vitest](https://vitest.dev/)
+2. **Create socket composable:**
 
-```sh
-bun test:unit
+```typescript
+// src/composables/useYourGameSocket.ts
+import { io, Socket } from 'socket.io-client'
+
+let socket: Socket | null = null
+
+export function useYourGameSocket() {
+  function connect() {
+    socket = io('http://localhost:3000')
+    return socket
+  }
+
+  // Add emit and on functions
+
+  return {
+    connect,
+    // ...
+  }
+}
 ```
 
-### Lint with [ESLint](https://eslint.org/)
+3. **Add route:**
 
-```sh
-bun lint
+```typescript
+// src/router/index.ts
+import YourGame from '@/views/YourGame.vue'
+
+const routes = [
+  // ... existing routes
+  {
+    path: '/yourgame',
+    name: 'YourGame',
+    component: YourGame,
+  },
+]
 ```
+
+## Design System
+
+The project includes common UI components in `src/common/`:
+
+| Component     | Description     |
+| ------------- | --------------- |
+| `Button.vue`  | Styled button   |
+| `Input.vue`   | Text input      |
+| `Card.vue`    | Card container  |
+| `Badge.vue`   | Status badge    |
+| `Alert.vue`   | Alert message   |
+| `Table.vue`   | Data table      |
+| `Divider.vue` | Section divider |
+
+## Socket Connection
+
+The default server URL is `http://localhost:3000`.
+
+To change it, update the `io()` call in each composable:
+
+```typescript
+socket = io('http://your-server:port')
+```
+
+## Dependencies
+
+- `vue` - Frontend framework
+- `vue-router` - Routing
+- `socket.io-client` - WebSocket client
+- `vite` - Build tool
+- `typescript` - TypeScript support
+
+## Recommended Setup
+
+- **VS Code** with **Vue.volar** extension
+- **Chromium browser** with Vue DevTools

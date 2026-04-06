@@ -7,13 +7,12 @@ import Button from '@/common/Button.vue'
 import Table from '@/common/Table.vue'
 import Input from '@/common/Input.vue'
 
-const socket = io('http://localhost:3001', {
+const socket = io('http://localhost:3000', {
   transports: ['websocket'],
   reconnection: true,
 })
 
 socket.on('connect', () => {
-  console.log(`Hola de nuevo id: ${socket.id}`)
   socket.emit('getLobbies')
 })
 
@@ -49,7 +48,6 @@ socket.on('lobbiesList', (lobbies) => {
   lobbys.value = lobbies
 })
 
-// ─── Las keys tienen que coincidir entre columns y rows ───
 const columns = [
   { key: 'id', label: 'Lobby', mono: true },
   { key: 'players', label: 'Players', align: 'center' as const },
@@ -70,21 +68,18 @@ const rows = computed(() =>
 <template>
   <main>
     <Table :columns="columns" :rows="rows">
-      <!-- Celda players con badge -->
       <template #cell-players="{ row }">
         <Badge :variant="row._raw.users >= 6 ? 'red' : 'orange'">
           {{ row.players }}
         </Badge>
       </template>
 
-      <!-- Celda status con badge -->
       <template #cell-status="{ row }">
         <Badge :variant="row._raw.users >= 6 ? 'red' : 'blue'">
           {{ row.status }}
         </Badge>
       </template>
 
-      <!-- Celda action con botón -->
       <template #cell-action="{ row }">
         <Button
           variant="outline"
@@ -96,11 +91,9 @@ const rows = computed(() =>
         </Button>
       </template>
 
-      <!-- Empty -->
       <template #empty> No hay lobbys disponibles </template>
     </Table>
 
-    <!-- Controles -->
     <div class="controls">
       <Input v-model="lobbyName" placeholder="Nombre del lobby…"></Input>
       <div class="controls-buttons">
