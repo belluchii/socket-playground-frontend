@@ -34,8 +34,9 @@ export function useChessSocket() {
     fromCol: number,
     toRow: number,
     toCol: number,
+    hasMoved: boolean,
   ) {
-    socket?.emit('MovePiece', roomId, fromRow, fromCol, toRow, toCol)
+    socket?.emit('MovePiece', roomId, fromRow, fromCol, toRow, toCol, hasMoved)
   }
 
   // Emits pawn promotion to selected piece type.
