@@ -17,6 +17,9 @@
         sId = socket.id!;
         socket.emit("JoinRoom");
         socket.emit("RequestType", sId);
+        createOverlay();
+        // socket.emit("GrantTurn", sId);
+        socket.emit("WaitForPlayer");
     });
 
     socket.on("AskType", () => {
@@ -40,6 +43,60 @@
         }
     });
 
+    socket.on("YourTurn", () => {
+        removeOverlay();
+    });
+
+    socket.on("WaitMessage", (message: string) => {
+        const messageElement = document.createElement('p');
+        messageElement.textContent = message;
+        messageElement.style.position = 'fixed';
+        messageElement.style.zIndex = '1001';
+        messageElement.style.color = 'var(--color-white)';
+        messageElement.style.fontFamily = '--font-mono';
+        messageElement.style.fontSize = '1.25rem';
+        messageElement.id = 'waitMessage';
+        document.getElementById('Main')?.appendChild(messageElement);
+    });
+
+    socket.on("StartGame", () => {
+        document.getElementById('waitMessage')?.remove();
+    });
+
+    function createOverlay(){
+        const overlay = document.createElement('div');
+        
+        // Estilos del overlay
+        overlay.style.position = 'fixed';
+        overlay.style.top = '23.3%';
+        overlay.style.left = '34.2%';
+        overlay.style.width = '400px';
+        overlay.style.height = '400px';
+        overlay.style.backgroundColor = 'var(--color-black)';
+        overlay.style.zIndex = '1000';
+        overlay.style.opacity='0.40';
+        overlay.id = 'overlay';
+
+        // Evitar clics en elementos debajo
+        overlay.addEventListener('click', (e: MouseEvent) => {
+            e.stopPropagation();
+        });
+        
+        const element = document.getElementById('Main');
+
+        element?.appendChild(overlay);
+        return;
+    }
+
+    function removeOverlay() {
+        const child = document.getElementById('overlay');
+        if (child) {
+            child.remove();
+        }
+        return;
+    }
+
+
     function GiveType(type: string) {
         if (type === '') {
             typeP=Math.floor(Math.random() * (2)) === 0 ? 'X' : 'O';
@@ -53,11 +110,10 @@
         return;
     }
 
-    // const turno = ref<string>('X');
     
     function checkWin(index: number) {
         let type = celdas.value[index];
-        let b: number = 0; // c = contador, b = existe alguna combinacion de 3 en raya
+        let b: number = 0; // b = existe alguna combinacion de 3 en raya
         for (let i = 0; i < 3; i++) {
             if (celdas.value[i] === type && celdas.value[i+3] === type && celdas.value[i+6] === type) {
                 b = 1;
@@ -86,13 +142,16 @@
 
     function MarkPlace(index: number) {
         if (celdas.value[index] !== null) return;
-        socket.emit("MarkPlace", index, typeP);   
-        // typeP = typeP === 'X' ? 'O' : 'X';
+        socket.emit("MarkPlace", index, typeP);  
+        socket.emit("GrantTurn", sId);
+        createOverlay();
+        return;
     }
+
 </script>
 
 <template>
-    <div class="Main">
+    <div id="Main">
         <div class="BG">
             <div class="tablero">
                 <div class="celda" v-for="(celda,index) in 9" :key="index":class="
@@ -105,7 +164,7 @@
 </template>
 
 <style scoped>
-    .Main {
+    #Main {
         display: flex;
         flex-direction: column;
         justify-content: center;
