@@ -6,6 +6,7 @@
     const celdas = ref<(string | null)[]>(Array(9).fill(null));
     let sId:string = '';
 
+    const overlay:boolean = ref(false);
 
     const socket = io('http://localhost:3001', {
     transports: ['websocket'],
@@ -17,7 +18,7 @@
         sId = socket.id!;
         socket.emit("JoinRoom");
         socket.emit("RequestType", sId);
-        createOverlay();
+        overlay.value = true;
         // socket.emit("GrantTurn", sId);
         socket.emit("WaitForPlayer");
     });
@@ -63,37 +64,8 @@
         document.getElementById('waitMessage')?.remove();
     });
 
-    function createOverlay(){
-        const overlay = document.createElement('div');
-        
-        // Estilos del overlay
-        overlay.style.position = 'fixed';
-        overlay.style.top = '23.3%';
-        overlay.style.left = '34.2%';
-        overlay.style.width = '400px';
-        overlay.style.height = '400px';
-        overlay.style.backgroundColor = 'var(--color-black)';
-        overlay.style.zIndex = '1000';
-        overlay.style.opacity='0.40';
-        overlay.id = 'overlay';
-
-        // Evitar clics en elementos debajo
-        overlay.addEventListener('click', (e: MouseEvent) => {
-            e.stopPropagation();
-        });
-        
-        const element = document.getElementById('Main');
-
-        element?.appendChild(overlay);
-        return;
-    }
-
     function removeOverlay() {
-        const child = document.getElementById('overlay');
-        if (child) {
-            child.remove();
-        }
-        return;
+        overlay.value = false;
     }
 
 
@@ -144,7 +116,7 @@
         if (celdas.value[index] !== null) return;
         socket.emit("MarkPlace", index, typeP);  
         socket.emit("GrantTurn", sId);
-        createOverlay();
+        overlay.value=true;
         return;
     }
 
@@ -152,6 +124,7 @@
 
 <template>
     <div id="Main">
+        <p :class="['overlay',overlay?'':'d-none']" ></p>
         <div class="BG">
             <div class="tablero">
                 <div class="celda" v-for="(celda,index) in 9" :key="index":class="
@@ -251,5 +224,17 @@
         background-size: 150% 100%;
         background-position: center;
         cursor: not-allowed;
+    }
+
+    .overlay{
+        position:absolute;
+        width: 400px;
+        height: 400px;
+        background-color: var(--color-black);
+        z-index: 1000;
+        opacity: 0.40;
+    }
+    .d-none{
+        display:none;
     }
 </style>  
