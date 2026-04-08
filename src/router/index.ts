@@ -13,17 +13,17 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/Lobbys.vue'),
   },
   {
-    path: '/Game/TicTacToe',
+    path: '/game/tictactoe',
     name: 'TicTacToe',
     component: () => import('@/views/TicTacToe.vue'),
   },
   {
-    path: '/Game/chess',
+    path: '/game/chess',
     name: 'Chess',
     component: () => import('@/views/Chess.vue'),
   },
   {
-    path: '/Game/arm-wrestling',
+    path: '/game/arm-wrestling',
     name: 'ArmWrestling',
     component: () => import('@/views/ArmWrest.vue'),
   },
