@@ -4,27 +4,25 @@ import socket from '../utils/socket'
 
 const bigRange: ref<[number, number]> = ref([70, 90])
 const closeRange: ref<[number, number]> = ref([40, 50])
-const interval: typeof setInterval | null = ref(null)
+const interval = ref<ReturnType<typeof setInterval> | null>(null)
 const history: number[] = ref([])
 const rivalHistory = ref([])
 const strength: number = ref(0)
-const time: number = 1000
-let canPush: boolean = false
+const time: number = 2000
 const degs: number = ref(0)
-const rounds: number = ref(3)
-const currentRound: number = ref(0)
+const speedIncrement: number = 0.25
+let canPush: boolean = false
+let speed: number = 1
 let startTime: number | null = null
 
-function startRound() {
-  if (interval.value) return
-  setRoundDefaults()
-  startTime = Date.now()
-  interval.value = setInterval(() => {
-    manageRoundFrames()
-  }, 10)
+function initializeNewGame() {
+  history.value = []
+  rivalHistory.value = []
+  strength.value = 0
+  speed = 1
 }
 
-function setRoundDefaults() {
+function setRandomRanges() {
   canPush = true
   bigRange.value[0] = Math.floor(Math.random() * 80 + 1)
   bigRange.value[1] = bigRange.value[0] + 20
@@ -32,45 +30,94 @@ function setRoundDefaults() {
   closeRange.value[1] = closeRange.value[0] + 10
 }
 
-function manageRoundFrames() {
-  const elapsed = Date.now() - startTime!
-  if (canPush) degs.value = (elapsed / time) * 270
+function startNewRound() {
+  if (interval.value) return
+  setRandomRanges()
+  startTime = Date.now()
+  interval.value = setInterval(() => {
+    updateRoundAnimation()
+  }, 10)
+}
 
-  if (elapsed >= time) {
+function updateRoundAnimation() {
+  const elapsed = Date.now() - startTime!
+  if (canPush) degs.value = (elapsed / (time / speed)) * 270
+
+  if (elapsed >= time / speed) {
     clearInterval(interval.value)
     interval.value = null
-    currentRound.value += 1
     startTime = null
+
     if (canPush) {
-      canPush = false
       history.value.push(0)
-      socket.emit('sendResult', history.value, 'roomid')
+      socket.emit('finishRound', 0, 'roomid')
     }
-    if (currentRound.value < rounds.value) startRound()
-    else currentRound.value = 0
   }
 }
 
-function pushArm() {
+function pushArmButton() {
   if (!canPush) return
   const elapsed = Date.now() - startTime!
-  const progress = (elapsed / time) * 100
-  let holder = 0
-  if (bigRange.value[0] <= progress && progress <= bigRange.value[1]) holder = 1
-  if (closeRange.value[0] <= progress && progress <= closeRange.value[1]) holder = 2
-  strength.value += holder
-  history.value.push(holder)
-  socket.emit('sendResult', history.value, 'roomid')
+  const progress = (elapsed / (time / speed)) * 100
+  let points = 0
+  if (bigRange.value[0] <= progress && progress <= bigRange.value[1]) points = 1
+  if (closeRange.value[0] <= progress && progress <= closeRange.value[1]) points = 2
+  strength.value += points
+  history.value.push(points)
+  socket.emit('finishRound', points, 'roomid')
   canPush = false
+  clearInterval(interval.value)
+  interval.value = null
+}
+
+function handleStartNewGame() {
+  socket.emit('initializeNewGame', 'roomid')
+}
+
+function calculateDifference() {
+  return rivalHistory.value.reduce((a, c) => a + c, 0) - history.value.reduce((a, c) => a + c, 0)
+}
+
+function checkGameWinner(difference: number) {
+  if (difference <= -3) {
+    console.log('victoria')
+  } else if (difference >= 3) {
+    console.log('derrota')
+  } else {
+    if (speed < 5) speed += speedIncrement
+  }
 }
 
 socket.emit('joinArmWrestle', 'roomid')
-socket.on('startGame', (rounds) => startRound(rounds))
-socket.on('emitResult', (history) => (rivalHistory.value = history))
 
-function startGame() {
-  socket.emit('startGame', 3, 'roomid')
-}
+socket.on('roomReadyToStart', () => {
+  console.log('Ambos jugadores listos')
+})
+
+socket.on('gameInitialized', () => {
+  initializeNewGame()
+  startNewRound()
+})
+
+socket.on('startNewRound', () => startNewRound())
+
+socket.on('opponentFinishedRound', (score) => {
+  rivalHistory.value.push(score)
+
+  if (history.value.length === rivalHistory.value.length) {
+    const difference = calculateDifference()
+    checkGameWinner(difference)
+  }
+})
+
+socket.on('gameFinished', (data) => {
+  if (interval.value) clearInterval(interval.value)
+  console.log('Juego terminado', data)
+})
+
+socket.on('opponentDisconnected', () => {
+  if (interval.value) clearInterval(interval.value)
+})
 </script>
 
 <template>
@@ -92,8 +139,8 @@ function startGame() {
       ></div>
     </div>
     <div class="button-cont">
-      <button @click="pushArm()">stop clock</button>
-      <button @click="startGame()">Start round</button>
+      <button @click="pushArmButton()">stop clock</button>
+      <button @click="handleStartNewGame()">Start Game</button>
     </div>
     <p>history: {{ history }}</p>
     <p>rivalHistory: {{ rivalHistory }}</p>
