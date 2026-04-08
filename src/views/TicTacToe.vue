@@ -3,10 +3,11 @@
     import { io, Socket } from 'socket.io-client';
 
     let typeP: string = '';
-    const celdas = ref<(string | null)[]>(Array(9).fill(null));
+    const board = ref<(string | null)[]>(Array(9).fill(null));
     let sId:string = '';
 
-    const overlay:boolean = ref(false);
+    const overlay = ref(false);
+    const waitMessage =ref(false);
 
     const socket = io('http://localhost:3001', {
     transports: ['websocket'],
@@ -21,6 +22,15 @@
         overlay.value = true;
         // socket.emit("GrantTurn", sId);
         socket.emit("WaitForPlayer");
+        socket.emit("askBoard")
+    });
+
+    socket.on("giveBoard", () => {
+      socket.emit("sendBoard", board.value);
+    })
+
+    socket.on("receiveBoard", (pkg: (string | null)[]) => {
+      board.value = pkg;
     });
 
     socket.on("AskType", () => {
@@ -32,7 +42,7 @@
     });
 
     socket.on("PlaceMarked", (index:number, typeP:string) => {
-        celdas.value[index] = typeP;
+        board.value[index] = typeP;
         checkWin(index);
     });
 
@@ -48,20 +58,12 @@
         removeOverlay();
     });
 
-    socket.on("WaitMessage", (message: string) => {
-        const messageElement = document.createElement('p');
-        messageElement.textContent = message;
-        messageElement.style.position = 'fixed';
-        messageElement.style.zIndex = '1001';
-        messageElement.style.color = 'var(--color-white)';
-        messageElement.style.fontFamily = '--font-mono';
-        messageElement.style.fontSize = '1.25rem';
-        messageElement.id = 'waitMessage';
-        document.getElementById('Main')?.appendChild(messageElement);
+    socket.on("WaitMessage", () => {
+        waitMessage.value = true;
     });
 
     socket.on("StartGame", () => {
-        document.getElementById('waitMessage')?.remove();
+        waitMessage.value = false;
     });
 
     function removeOverlay() {
@@ -84,36 +86,36 @@
 
     
     function checkWin(index: number) {
-        let type = celdas.value[index];
+        let type = board.value[index];
         let b: number = 0; // b = existe alguna combinacion de 3 en raya
         for (let i = 0; i < 3; i++) {
-            if (celdas.value[i] === type && celdas.value[i+3] === type && celdas.value[i+6] === type) {
+            if (board.value[i] === type && board.value[i+3] === type && board.value[i+6] === type) {
                 b = 1;
                 break;
             }
-            if (celdas.value[i*3] === type && celdas.value[i*3+1] === type && celdas.value[i*3+2] === type) {
+            if (board.value[i*3] === type && board.value[i*3+1] === type && board.value[i*3+2] === type) {
                 b = 1;
                 break;
             }
         }
         if (b === 0) {
-            if ((celdas.value[0] === type && celdas.value[4] === type && celdas.value[8] === type) || (celdas.value[2] === type && celdas.value[4] === type && celdas.value[6] === type)) {
+            if ((board.value[0] === type && board.value[4] === type && board.value[8] === type) || (board.value[2] === type && board.value[4] === type && board.value[6] === type)) {
                 b = 1;
             }
         }
         if (b===1){
             socket.emit("GameOver", type, sId);
-            celdas.value = Array(9).fill(null);
+            board.value = Array(9).fill(null);
         }
-        else if (!celdas.value.includes(null)) {
+        else if (!board.value.includes(null)) {
             socket.emit("GameOver", "Draw", sId);
-            celdas.value = Array(9).fill(null);
+            board.value = Array(9).fill(null);
         }
         return;
     }
 
     function MarkPlace(index: number) {
-        if (celdas.value[index] !== null) return;
+        if (board.value[index] !== null) return;
         socket.emit("MarkPlace", index, typeP);  
         socket.emit("GrantTurn", sId);
         overlay.value=true;
@@ -125,11 +127,12 @@
 <template>
     <div id="Main">
         <p :class="['overlay',overlay?'':'d-none']" ></p>
+        <p :class="['waitMessage',waitMessage?'':'d-none']">Waiting for another player to join...</p>
         <div class="BG">
             <div class="tablero">
                 <div class="celda" v-for="(celda,index) in 9" :key="index":class="
-                    {'player-x': celdas[index] === 'X',
-                    'player-o': celdas[index] === 'O'}"
+                    {'player-x': board[index] === 'X',
+                    'player-o': board[index] === 'O'}"
                     @click="MarkPlace(index)"></div>
             </div>
         </div>
@@ -236,5 +239,13 @@
     }
     .d-none{
         display:none;
+    }
+
+    .waitMessage{
+      position :absolute;
+      z-index : 1001;
+      color :var(--color-white);
+      font-family :--font-mono;
+      font-size :1.25rem;
     }
 </style>  
