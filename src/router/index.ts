@@ -17,6 +17,11 @@ const routes: RouteRecordRaw[] = [
     name: 'TicTacToe',
     component: () => import('@/views/TicTacToe.vue'),
   },
+  {
+    path: '/Game/chess',
+    name: 'Chess',
+    component: () => import('@/views/Chess.vue'),
+  },
 ]
 
 const router = createRouter({
