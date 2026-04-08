@@ -63,7 +63,6 @@ const {
   onPiecePromoted,
   onGameOver,
   onPlayerDisconnected,
-  requestGameState,
 } = useChessSocket()
 
 // Highlights valid moves for selected piece.
@@ -216,7 +215,7 @@ function endMove(row: number, col: number) {
   const move = movePiece(fromRow, fromCol, row, col)
   if (!move) return
 
-  emitMove(roomId, fromRow, fromCol, row, col)
+  emitMove(roomId, fromRow, fromCol, row, col, true)
 
   const piece = board[row]?.[col]
   if (piece?.type === 'pawn' && (row === 0 || row === 7)) {

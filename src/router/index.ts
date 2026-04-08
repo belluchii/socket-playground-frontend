@@ -22,6 +22,11 @@ const routes: RouteRecordRaw[] = [
     name: 'Chess',
     component: () => import('@/views/Chess.vue'),
   },
+  {
+    path: '/Game/arm-wrestling',
+    name: 'ArmWrestling',
+    component: () => import('@/views/ArmWrest.vue'),
+  },
 ]
 
 const router = createRouter({
