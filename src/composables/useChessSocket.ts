@@ -1,10 +1,5 @@
-import { io, Socket } from 'socket.io-client'
+import socket from '../utils/socket'
 import type { Piece } from '@/utils/chess'
-
-// Socket instance for chess communication.
-// Used by: Chess.vue to send and receive game events.
-// Connects to: server Chess.ts events for multiplayer synchronization.
-let socket: Socket | null = null
 
 // Main composable for chess socket functionality.
 // Used by: Chess.vue to manage socket connection and game events.
@@ -12,9 +7,8 @@ let socket: Socket | null = null
 export function useChessSocket() {
   // Initializes and connects to the socket.io server.
   // Used by: Chess.vue onMounted to establish connection.
-  // Connects to: io() to create socket connection to localhost:3000.
+  // Connects to: io() to create socket connection to server port.
   function connect() {
-    socket = io('http://localhost:3000')
     return socket
   }
 
