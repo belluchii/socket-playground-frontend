@@ -1,11 +1,10 @@
 ws-playground\ws-playground-front\src\views\SnakeIo.vue ``` ```vue
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { io, Socket } from 'socket.io-client'
+import socket from '../utils/socket'
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 let ctx: CanvasRenderingContext2D | null = null
-let socket: Socket | null = null
 
 const mapSize = 30
 const cellSize = 20
@@ -96,8 +95,6 @@ function handleInput(e: KeyboardEvent) {
 
 onMounted(() => {
   ctx = canvas.value?.getContext('2d')
-
-  socket = io('http://localhost:3000')
 
   socket.on('connect', () => {
     socket?.emit('JoinRoom', roomId)
