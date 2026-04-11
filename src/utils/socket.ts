@@ -1,6 +1,6 @@
 import { io } from 'socket.io-client'
 
-const socket = io('https://4741-186-65-102-3.ngrok-free.app', {
+const socket = io('http://localhost:3000', {
   reconnection: true,
   reconnectionDelay: 1000,
   reconnectionAttempts: 10,
