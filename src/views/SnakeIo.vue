@@ -1,143 +1,262 @@
-ws-playground\ws-playground-front\src\views\SnakeIo.vue ``` ```vue
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import socket from '../utils/socket'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { useSnakeSocket } from '@/composables/useSnakeSocket'
+import CommonButton from '@/common/Button.vue'
+import CommonCard from '@/common/Card.vue'
+import CommonBadge from '@/common/Badge.vue'
+import {
+  MAP_SIZE,
+  CELL_SIZE,
+  DIRECTIONS,
+  initCanvas,
+  draw,
+  type GameState,
+  type ReadyStatus,
+  type GameEndedInfo,
+} from '@/utils/snake'
 
 const canvas = ref<HTMLCanvasElement | null>(null)
-let ctx: CanvasRenderingContext2D | null = null
 
-const mapSize = 30
-const cellSize = 20
-const roomId = 'snake1'
+// Socket API
+const socketApi = useSnakeSocket()
 
-interface SnakeData {
-  id: string
-  positions: number[][]
-  direction: [number, number]
-  alive: boolean
-}
-
-interface GameState {
-  snakes: SnakeData[]
-  fruits: number[][]
-  mapSize: number
-}
-
+// Game State
 const gameState = ref<GameState>({
   snakes: [],
   fruits: [],
-  mapSize: 30,
+  mapSize: MAP_SIZE,
+  gameStarted: false,
+  gameEnded: false,
+  winnerId: null,
 })
-let playerId = ''
-const myDirection: [number, number] = [0, 1]
-const lastSentDirection: [number, number] = [0, 1]
+
+// Player State
+const myPlayerId = ref('')
+const myDirection = ref<[number, number]>([0, 1])
+const lastSentDirection = ref<[number, number]>([0, 1])
 let inputSent = false
 
-const directions: Record<string, [number, number]> = {
-  ArrowUp: [-1, 0],
-  ArrowDown: [1, 0],
-  ArrowLeft: [0, -1],
-  ArrowRight: [0, 1],
+// Ready State
+const iAmReady = ref(false)
+const isWaiting = ref(false)
+const waitingMessage = ref('Partida en progreso...')
+const overlayVisible = ref(false)
+
+// Room State
+const readyStatus = ref<ReadyStatus>({
+  ready: [],
+  total: 0,
+  allReady: false,
+  gameStarted: false,
+  gameEnded: false,
+  playerNames: {},
+})
+
+const route = useRoute()
+const roomId = (route.query.room as string) || 'default'
+
+// Computed
+const aliveCount = computed(() => {
+  return gameState.value.snakes.filter((s) => s.alive).length
+})
+
+const notReadyPlayers = computed(() => {
+  return gameState.value.snakes
+    .map((s) => s.id)
+    .filter((id) => !readyStatus.value.ready.includes(id))
+})
+
+const canReady = computed(() => {
+  return !gameState.value.gameStarted && !overlayVisible.value
+})
+
+// Helpers
+function getPlayerName(playerId: string): string {
+  return readyStatus.value.playerNames?.[playerId] || `Jugador ${playerId.substring(0, 6)}`
 }
 
-function drawMap() {
-  if (!ctx) return
-  ctx.fillStyle = '#000'
-  ctx.fillRect(0, 0, mapSize * cellSize, mapSize * cellSize)
-  ctx.strokeStyle = '#222'
-  for (let i = 0; i <= mapSize; i++) {
-    ctx.strokeRect(i * cellSize, 0, cellSize, mapSize * cellSize)
-    ctx.strokeRect(0, i * cellSize, mapSize * cellSize, cellSize)
-  }
-}
-
-function drawFruits() {
-  if (!ctx || !gameState.value.fruits.length) return
-  ctx.fillStyle = '#f0f'
-  gameState.value.fruits.forEach(([y, x]) => {
-    ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize)
-  })
-}
-
-function drawSnakes() {
-  if (!ctx) return
-  gameState.value.snakes.forEach((snake) => {
-    if (!snake.positions?.length || !snake.alive) return
-    const isMe = snake.id === playerId
-    ctx.fillStyle = isMe ? '#0f0' : '#f00'
-    snake.positions.forEach(([y, x]) => {
-      ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize)
-    })
-  })
-}
-
-function draw() {
-  drawMap()
-  drawFruits()
-  drawSnakes()
-}
-
+// Input handlers
 function handleInput(e: KeyboardEvent) {
-  const dir = directions[e.key]
-  if (!dir) return
+  if (isWaiting.value) return
 
+  const dir = DIRECTIONS[e.key]
+  if (!dir) return
+  e.preventDefault()
   const [dy, dx] = dir
-  const [lsdy, lsdx] = lastSentDirection
+  const [lsdy, lsdx] = lastSentDirection.value
   if ((dy + lsdy === 0 && dx + lsdx === 0) || inputSent) return
 
   inputSent = true
-  myDirection[0] = dy
-  myDirection[1] = dx
-  lastSentDirection[0] = dy
-  lastSentDirection[1] = dx
-  socket?.emit('Input', roomId, dir)
+  lastSentDirection.value = [dy, dx]
+  socketApi.emitInput(roomId, dir)
 }
 
-onMounted(() => {
-  ctx = canvas.value?.getContext('2d')
+function toggleReady() {
+  if (gameState.value.gameStarted) return
+  if (isWaiting.value) return
 
-  socket.on('connect', () => {
-    socket?.emit('JoinRoom', roomId)
+  if (iAmReady.value) {
+    socketApi.emitUnready(roomId)
+    iAmReady.value = false
+  } else {
+    socketApi.emitReady(roomId)
+    iAmReady.value = true
+  }
+}
+
+// Socket event handlers
+function setupSocketEvents() {
+  socketApi.connect(roomId)
+
+  socketApi.onPlayerId((id: string) => {
+    myPlayerId.value = id
+    render()
   })
 
-  socket.on('PlayerId', (id: string) => {
-    playerId = id
+  socketApi.onWaitingForGameEnd((data: { message: string; currentPlayers: number }) => {
+    isWaiting.value = true
+    overlayVisible.value = true
+    waitingMessage.value = data.message
   })
 
-  socket.on('GameState', (state: GameState) => {
+  socketApi.onGameState((state: GameState) => {
     if (!state.snakes) return
     inputSent = false
     gameState.value = state
-    const mySnake = state.snakes.find((s) => s.id === playerId)
-    if (mySnake) {
-      const [dy, dx] = mySnake.direction
-      myDirection[0] = dy
-      myDirection[1] = dx
-      lastSentDirection[0] = dy
-      lastSentDirection[1] = dx
+
+    if (!state.gameStarted && isWaiting.value) {
+      isWaiting.value = false
     }
-    draw()
+
+    if (myPlayerId.value) {
+      const mySnake = state.snakes.find((s) => s.id === myPlayerId.value)
+      if (mySnake) {
+        myDirection.value = [...mySnake.direction]
+        lastSentDirection.value = [...mySnake.direction]
+      }
+    }
+    render()
   })
 
+  socketApi.onReadyStatus((status: ReadyStatus) => {
+    readyStatus.value = status
+
+    if (myPlayerId.value) {
+      iAmReady.value = status.ready.includes(myPlayerId.value)
+    }
+  })
+
+  socketApi.onGameStarted(() => {
+    gameState.value.gameStarted = true
+    gameState.value.gameEnded = false
+    iAmReady.value = false
+    isWaiting.value = false
+    overlayVisible.value = false
+    render()
+  })
+
+  socketApi.onGameEnded((info: GameEndedInfo) => {
+    gameState.value.gameStarted = false
+    gameState.value.gameEnded = true
+    gameState.value.winnerId = info.winnerId
+    iAmReady.value = false
+
+    if (isWaiting.value || overlayVisible.value) {
+      isWaiting.value = false
+      overlayVisible.value = false
+
+      setTimeout(() => {
+        socketApi.connect(roomId)
+        setTimeout(() => {
+          socketApi.emitReady(roomId)
+          iAmReady.value = true
+        }, 300)
+      }, 500)
+    }
+
+    render()
+  })
+}
+
+function cleanupSocketEvents() {
+  socketApi.removeAllListeners()
+}
+
+function render() {
+  draw(gameState.value.snakes, gameState.value.fruits, myPlayerId.value)
+}
+
+// Lifecycle
+onMounted(() => {
+  initCanvas(canvas.value)
+  setupSocketEvents()
   window.addEventListener('keydown', handleInput)
 })
 
 onUnmounted(() => {
+  cleanupSocketEvents()
   window.removeEventListener('keydown', handleInput)
-  socket?.disconnect()
 })
-
-function startGame() {
-  socket?.emit('StartGame', roomId)
-}
 </script>
 
 <template>
   <main>
-    <canvas ref="canvas" :width="mapSize * cellSize" :height="mapSize * cellSize"></canvas>
-    <button @click="startGame">Start Game</button>
-    <p>Player ID: {{ playerId }}</p>
-    <p>Snakes: {{ gameState.snakes.length }}</p>
+    <canvas ref="canvas" :width="MAP_SIZE * CELL_SIZE" :height="MAP_SIZE * CELL_SIZE"></canvas>
+
+    <!-- Waiting overlay -->
+    <CommonCard v-if="overlayVisible" variant="dark">
+      <h2>{{ waitingMessage }}</h2>
+      <p>Podrás unirte cuando termine</p>
+    </CommonCard>
+
+    <!-- Controls -->
+    <div class="controls">
+      <template v-if="!gameState.gameStarted">
+        <CommonButton v-if="!iAmReady" variant="primary" :disabled="!canReady" @click="toggleReady">
+          ✓ Ready
+        </CommonButton>
+
+        <CommonButton v-else variant="secondary" @click="toggleReady"> ✗ Unready </CommonButton>
+      </template>
+
+      <p v-else class="game-status">🎮 ¡Partida en curso!</p>
+    </div>
+
+    <!-- Players List -->
+    <CommonCard variant="striped" label="Jugadores">
+      <ul>
+        <li v-for="playerId in readyStatus.ready" :key="playerId">
+          ✓ {{ getPlayerName(playerId) }}
+          <span v-if="playerId === myPlayerId">(tú)</span>
+        </li>
+        <li v-for="playerId in notReadyPlayers" :key="playerId">
+          ○ {{ getPlayerName(playerId) }}
+          <span v-if="playerId === myPlayerId">(tú)</span>
+        </li>
+      </ul>
+      <template #actions>
+        <CommonBadge v-if="readyStatus.allReady">
+          {{ readyStatus.ready.length }}/{{ readyStatus.total }} listos
+        </CommonBadge>
+      </template>
+    </CommonCard>
+
+    <!-- Winner Banner -->
+    <CommonCard v-if="gameState.gameEnded && gameState.winnerId" variant="orange">
+      <h2 v-if="gameState.winnerId === myPlayerId">¡TRIUNFO!</h2>
+      <h2 v-else>{{ getPlayerName(gameState.winnerId) }} gana!</h2>
+    </CommonCard>
+
+    <CommonCard v-if="gameState.gameEnded && !gameState.winnerId" variant="accent-top">
+      <h2>¡EMPATE!</h2>
+    </CommonCard>
+
+    <!-- Status -->
+    <CommonCard variant="default">
+      <p>ID: {{ myPlayerId ? myPlayerId.substring(0, 8) : 'Conectando...' }}</p>
+      <p v-if="gameState.gameStarted && !gameState.gameEnded">Vivos: {{ aliveCount }}</p>
+    </CommonCard>
   </main>
 </template>
 
@@ -146,14 +265,12 @@ main {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-top: 100px;
+  margin-top: 150px;
+  position: relative;
 }
-button {
-  width: min-content;
-  padding: 10px;
-  margin-top: 10px;
-}
-p {
-  color: white;
+
+canvas {
+  border: 3px solid #333;
+  box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
 }
 </style>
