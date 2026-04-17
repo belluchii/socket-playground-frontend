@@ -2,6 +2,13 @@
     import { ref, computed } from 'vue'
     import socket from '../utils/socket.ts'
 
+    // ===== SOCKET.IO =====
+
+      socket.on('connect', () => {
+          console.log('Connected to server')
+          socket.emit('JoinLobby')
+      })
+
     // ===== ENUMS =====
     enum CellState {
         EMPTY = 'empty',
@@ -170,15 +177,16 @@
     if (success) {
       currentShipIndex.value++
       if (currentShipIndex.value >= SHIP_DEFINITIONS.length) {
-        placeEnemyShips()
-        phase.value = GamePhase.PLAYING
+        // placeEnemyShips()
+        // phase.value = GamePhase.PLAYING
+        // hideShips();
       }
     }
   }
 
   function placeEnemyShips() {
     SHIP_DEFINITIONS.forEach(def => {
-      let placed = false
+      let placed = false 
       while (!placed) {
         const orientation = Math.random() > 0.5
           ? Orientation.HORIZONTAL
@@ -202,13 +210,15 @@
 // ===== ATAQUES =====
   function attack(board: Cell[][], ships: Ship[], coord: Coordinate): 'hit' | 'miss' | 'sunk' | 'invalid' {
     const cell = board[coord.row][coord.col]
+    
 
     if (cell.state === CellState.HIT || cell.state === CellState.MISS || cell.state === CellState.SUNK) {
       return 'invalid'
     }
-
-    if (cell.state === CellState.SHIP && cell.shipId) {
-      cell.state = CellState.HIT
+    
+    if (cell?.state === CellState.SHIP || cell?.shipId) {
+      cell.state = CellState.HIT;
+      console.log(`Hit at (${coord.row}, ${coord.col}, ${cell?.state})`);
       const ship = ships.find(s => s.id === cell.shipId)
       if (ship) {
         ship.hits++
@@ -230,16 +240,18 @@
   function playerAttack(row: number, col: number) {
     if (phase.value !== GamePhase.PLAYING || currentTurn.value !== 'player') return
 
-    const result = attack(enemyBoard.value, enemyShips.value, { row, col })
+    const result = attack(playerBoard.value, playerShips.value, { row, col })
     if (result === 'invalid') return
 
-    if (enemyShips.value.every(s => s.isSunk)) {
-      phase.value = GamePhase.GAME_OVER
+    if (playerShips.value.every(s => s.isSunk)) {
+      phase.value = GamePhase.GAME_OVER;
+      alert('¡Has perdido! Todos tus barcos han sido hundidos.');
+      resetGame();
       return
     }
 
-    currentTurn.value = 'enemy'
-    setTimeout(enemyAttack, 800)
+    // currentTurn.value = 'enemy'
+    // setTimeout(enemyAttack, 800)
   }
 
   function enemyAttack() {
@@ -273,29 +285,70 @@
     currentShipIndex.value = 0
     currentOrientation.value = Orientation.HORIZONTAL
   }
+
+  // Ocultar los barcos después de colocarlos
+function hideShips() {
+  for (let row = 0; row < BOARD_SIZE; row++) {
+    for (let col = 0; col < BOARD_SIZE; col++) {
+      if (playerBoard.value[row][col].state === CellState.SHIP) {
+        playerBoard.value[row][col].state = CellState.EMPTY
+        // el shipId se mantiene, solo se oculta visualmente
+      }
+    }
+  }
+}
+
+function readyToPlay() {
+  if (currentShipIndex.value < SHIP_DEFINITIONS.length) {
+    alert('¡Coloca todos tus barcos antes de empezar!')
+    return
+  }
+  phase.value = GamePhase.PLAYING
+  hideShips();
+}
+
 </script>
 
 <template>
-    <div class="Main">
-    <!-- Tablero Jugador -->
-        <div class="board">
-            <div class="header"></div>
-            <div v-for="col in 10" :key="'p-col-' + col" class="header">
-            {{ String.fromCharCode(64 + col) }}
-            </div>
+  <div class="Main">
 
-            <template v-for="row in 10" :key="'p-row-' + row">
-                <div class="header">{{ row }}</div>
-                <div
-                v-for="col in 10"
-                :key="'p-cell-' + row + '-' + col"
-                class="cell"
-                >
-                </div>
-            </template>
+    <div class="boardBackground"></div>
+
+    
+
+    <div class="board">
+      <div class="header"></div>
+      <div v-for="col in 10" :key="'col-' + col" class="header">
+        {{ String.fromCharCode(64 + col) }}
+      </div>
+
+      <template v-for="row in 10" :key="'row-' + row">
+        <div class="header">{{ row }}</div>
+        <div
+          v-for="col in 10"
+          :key="'cell-' + row + '-' + col"
+          class="cell"
+          :class="'cell--' + playerBoard[row - 1][col - 1].state"
+          @click="(phase === GamePhase.PLAYING) ? playerAttack(row - 1, col - 1) : playerPlaceShip(row - 1, col - 1)"
+        >
         </div>
+      </template>
     </div>
+
+    <div class="sidebar">
+      <div v-if="phase === 'placing'" class="container">
+        <p>Colocando: {{ currentShipDef?.id }}</p>
+        <button @click="toggleOrientation">
+          Rotar ({{ currentOrientation }})
+        </button>
+        <button v-if="currentShipIndex >= SHIP_DEFINITIONS.length" @click="readyToPlay">
+          Ready
+        </button>
+      </div>
+    </div>
+  </div>
 </template>
+
 
 
 <style scoped>
@@ -304,9 +357,20 @@
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    min-height: 100vh;
-    font-family: Arial, sans-serif;
+    height: 100vh;
     margin-top: 40px;
+    position: relative;
+}
+
+.boardBackground {
+    position: absolute;
+    margin-top: 20px;
+    margin-left: 20px;
+    width: 500px;
+    height: 500px;
+    background-color: var(--color-black);
+    border-radius: 20px;
+    z-index: -1;
 }
 
 .board {
@@ -325,14 +389,56 @@
     font-size: 12px;
 }
 
-.cell {
-    background: #1a3a5c;
-    border: 1px solid #2a4a6b;
-    border-radius: 5px;
-    cursor: pointer;
-}
-
 .cell:hover {
     background: #2c4a6c;
+}
+
+.cell {
+  background: #1a3a5c;
+  border: 1px solid #2a4a6b;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.cell--miss {
+  background: var(--color-red);
+}
+
+.cell--hit {
+  background: var(--color-yellow);
+}
+
+.cell--sunk {
+  background: var(--color-orange);
+}
+
+.cell--ship {
+  background: #4a7c59;
+}
+
+.sidebar {
+  position: absolute;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  justify-items: center;
+  width: 200px;
+  height: 500px;
+  margin-top: 10px;
+  left: calc(50% - 450px); /* 50% + (mitad del tablero + margen) */
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: var(--color-blue);
+  padding-top: 30px;
+  border-radius: 20px;
+  font-family:Georgia, 'Times New Roman', Times, serif;
+  font-weight: 600;
+  color: var(--color-grey-lt);
+}
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
 }
 </style>
