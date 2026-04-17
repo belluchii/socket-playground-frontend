@@ -2,12 +2,12 @@
     import { ref, computed } from 'vue'
     import socket from '../utils/socket.ts'
 
-    // ===== SOCKET.IO =====
+    import { useRoute } from 'vue-router'
 
-      socket.on('connect', () => {
-          console.log('Connected to server')
-          socket.emit('JoinLobby')
-      })
+    const route = useRoute()
+    const roomId = (route.query.room as string) || 'default'
+
+
 
     // ===== ENUMS =====
     enum CellState {
@@ -98,6 +98,31 @@
     }
     return null
     })
+
+    // ===== SOCKET.IO =====
+
+    socket.on('connect', () => {
+        console.log('Connected to server')
+        socket.emit('JoinLobbyBS',roomId)
+    })
+    socket.on('StartGameBS', () => {
+        console.log('Both players are ready! Starting game...')
+        phase.value = GamePhase.PLAYING
+        socket.emit("RequestEnemyBoard", roomId);
+        socket.emit("RequestTurnBS", roomId);
+    })
+    socket.on('PackBoard', () => {
+        socket.emit('SendBoard', {
+            roomId,
+            board: hideShips(),
+            ships: playerShips.value,
+        })
+    })
+    socket.on('ReceiveEnemyBoard', (data: { board: Cell[][], ships: Ship[] }) => {
+        enemyBoard.value = data.board
+        enemyShips.value = data.ships
+    })
+
 
     // ===== UTILIDADES =====
     function isInBounds(coord: Coordinate): boolean {
@@ -288,24 +313,21 @@
 
   // Ocultar los barcos después de colocarlos
 function hideShips() {
+  const SubstituteBoard: Cell[][] = playerBoard.value;
   for (let row = 0; row < BOARD_SIZE; row++) {
     for (let col = 0; col < BOARD_SIZE; col++) {
-      if (playerBoard.value[row][col].state === CellState.SHIP) {
-        playerBoard.value[row][col].state = CellState.EMPTY
-        // el shipId se mantiene, solo se oculta visualmente
+      if (SubstituteBoard[row][col].state === CellState.SHIP) {
+        SubstituteBoard[row][col].state = CellState.EMPTY
       }
     }
   }
+  return SubstituteBoard;
 }
 
-function readyToPlay() {
-  if (currentShipIndex.value < SHIP_DEFINITIONS.length) {
-    alert('¡Coloca todos tus barcos antes de empezar!')
-    return
-  }
-  phase.value = GamePhase.PLAYING
-  hideShips();
+function sendReady() {
+  socket.emit('PlayerReadyBS', roomId)
 }
+
 
 </script>
 
@@ -341,7 +363,7 @@ function readyToPlay() {
         <button @click="toggleOrientation">
           Rotar ({{ currentOrientation }})
         </button>
-        <button v-if="currentShipIndex >= SHIP_DEFINITIONS.length" @click="readyToPlay">
+        <button v-if="currentShipIndex >= SHIP_DEFINITIONS.length" @click="sendReady">
           Ready
         </button>
       </div>
