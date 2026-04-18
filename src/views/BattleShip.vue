@@ -3,6 +3,7 @@
     import socket from '../utils/socket.ts'
 
     import { useRoute } from 'vue-router'
+import { count } from 'console'
 
     const route = useRoute()
     const roomId = (route.query.room as string) || 'default'
@@ -85,12 +86,19 @@
     // ===== ESTADO DEL JUEGO =====
     const playerBoard = ref<Cell[][]>(fillBoard())
     const enemyBoard = ref<Cell[][]>(fillBoard())
+    const currentBoard = ref<'player' | 'enemy'>('player')
+    const activeBoard = computed(() => {
+    return (currentBoard.value === 'player')
+      ? playerBoard.value
+      : enemyBoard.value
+    })
     const playerShips = ref<Ship[]>([])
     const enemyShips = ref<Ship[]>([])
     const phase = ref<GamePhase>(GamePhase.PLACING)
-    const currentTurn = ref<'player' | 'enemy'>('player')
+    const currentTurn = ref<'player' | 'enemy'>('enemy');
     const currentShipIndex = ref(0)
     const currentOrientation = ref<Orientation>(Orientation.HORIZONTAL)
+    let countPlayers = 0;
 
     const currentShipDef = computed(() => {
         if (currentShipIndex.value < SHIP_DEFINITIONS.length) {
@@ -105,12 +113,22 @@
         console.log('Connected to server')
         socket.emit('JoinLobbyBS',roomId)
     })
+
+
+    socket.on("isReadyBS",(count:number)=>{
+        if(countPlayers + count === 2){
+            socket.emit("BothReadyBS", roomId);
+        }
+    })
+
+
     socket.on('StartGameBS', () => {
         console.log('Both players are ready! Starting game...')
-        phase.value = GamePhase.PLAYING
         socket.emit("RequestEnemyBoard", roomId);
-        socket.emit("RequestTurnBS", roomId);
+        phase.value = GamePhase.PLAYING;
     })
+
+
     socket.on('PackBoard', () => {
         socket.emit('SendBoard', {
             roomId,
@@ -118,9 +136,23 @@
             ships: playerShips.value,
         })
     })
+
+
     socket.on('ReceiveEnemyBoard', (data: { board: Cell[][], ships: Ship[] }) => {
         enemyBoard.value = data.board
         enemyShips.value = data.ships
+    })
+    
+
+    socket.on("GrantTurnBS", () => {
+        console.log("It's your turn");
+        currentTurn.value = 'player';
+        currentBoard.value = 'enemy';
+    });
+
+
+    socket.on("ReceiveAttack", (row: number, col: number) => {
+        enemyAttack(row, col);
     })
 
 
@@ -158,6 +190,33 @@
         return true
         })
         }
+
+        // ===== REINICIAR =====
+    function resetGame() {
+      playerBoard.value = fillBoard()
+      playerShips.value = []
+      phase.value = GamePhase.PLACING
+      currentShipIndex.value = 0
+      currentOrientation.value = Orientation.HORIZONTAL
+    }
+
+    // Ocultar los barcos después de colocarlos
+    function hideShips() {
+      let SubsBoard: Cell[][] = playerBoard.value;
+      for (let row = 0; row < BOARD_SIZE; row++) {
+        for (let col = 0; col < BOARD_SIZE; col++) {
+          if (SubsBoard[row][col].state === CellState.SHIP) {
+            SubsBoard[row][col].state = CellState.EMPTY
+          }
+        }
+      }
+      return SubsBoard;
+    }
+
+    function sendReady() {
+      countPlayers++;
+      socket.emit('PlayerReadyBS', roomId,countPlayers);
+    }
 
     // ===== COLOCAR BARCOS =====
   function placeShip(
@@ -201,6 +260,7 @@
 
     if (success) {
       currentShipIndex.value++
+      currentBoard.value = 'player'
       if (currentShipIndex.value >= SHIP_DEFINITIONS.length) {
         // placeEnemyShips()
         // phase.value = GamePhase.PLAYING
@@ -209,21 +269,6 @@
     }
   }
 
-  function placeEnemyShips() {
-    SHIP_DEFINITIONS.forEach(def => {
-      let placed = false 
-      while (!placed) {
-        const orientation = Math.random() > 0.5
-          ? Orientation.HORIZONTAL
-          : Orientation.VERTICAL
-        const start: Coordinate = {
-          row: Math.floor(Math.random() * BOARD_SIZE),
-          col: Math.floor(Math.random() * BOARD_SIZE),
-        }
-        placed = placeShip(enemyBoard.value, enemyShips.value, def, start, orientation)
-      }
-    })
-  }
 
   function toggleOrientation() {
     currentOrientation.value =
@@ -233,11 +278,12 @@
   }
 
 // ===== ATAQUES =====
+
   function attack(board: Cell[][], ships: Ship[], coord: Coordinate): 'hit' | 'miss' | 'sunk' | 'invalid' {
     const cell = board[coord.row][coord.col]
     
 
-    if (cell.state === CellState.HIT || cell.state === CellState.MISS || cell.state === CellState.SUNK) {
+    if (cell?.state === CellState.HIT || cell?.state === CellState.MISS || cell?.state === CellState.SUNK) {
       return 'invalid'
     }
     
@@ -262,8 +308,35 @@
     return 'miss'
   }
 
+
+
   function playerAttack(row: number, col: number) {
     if (phase.value !== GamePhase.PLAYING || currentTurn.value !== 'player') return
+
+    const result = attack(enemyBoard.value, enemyShips.value, { row, col })
+    if (result === 'invalid') return
+
+    socket.emit("SendAttack", roomId, row, col);
+
+    console.log(enemyShips.value.length);
+
+    // if (enemyShips.value.every(s => s.isSunk)) {
+    //   phase.value = GamePhase.GAME_OVER;
+    //   alert('¡Has Ganado! Hundiste todos los barcos.');
+    //   // resetGame();
+    //   return
+    // }
+
+    currentTurn.value = 'enemy';
+    currentBoard.value = 'player'
+    socket.emit("SwitchTurnBS", roomId);
+    // setTimeout(enemyAttack, 800)
+  }
+
+
+
+  function enemyAttack(row: number, col: number) {
+    if (phase.value !== GamePhase.PLAYING || currentTurn.value !== 'enemy') return
 
     const result = attack(playerBoard.value, playerShips.value, { row, col })
     if (result === 'invalid') return
@@ -271,62 +344,14 @@
     if (playerShips.value.every(s => s.isSunk)) {
       phase.value = GamePhase.GAME_OVER;
       alert('¡Has perdido! Todos tus barcos han sido hundidos.');
-      resetGame();
-      return
-    }
-
-    // currentTurn.value = 'enemy'
-    // setTimeout(enemyAttack, 800)
-  }
-
-  function enemyAttack() {
-    let result: 'hit' | 'miss' | 'sunk' | 'invalid'
-    let coord: Coordinate
-
-    do {
-      coord = {
-        row: Math.floor(Math.random() * BOARD_SIZE),
-        col: Math.floor(Math.random() * BOARD_SIZE),
-      }
-      result = attack(playerBoard.value, playerShips.value, coord)
-    } while (result === 'invalid')
-
-    if (playerShips.value.every(s => s.isSunk)) {
-      phase.value = GamePhase.GAME_OVER
+      // resetGame();
       return
     }
 
     currentTurn.value = 'player'
+    currentBoard.value = 'enemy'
+    // socket.emit("SwitchTurnBS", roomId);
   }
-
-  // ===== REINICIAR =====
-  function resetGame() {
-    playerBoard.value = fillBoard()
-    enemyBoard.value = fillBoard()
-    playerShips.value = []
-    enemyShips.value = []
-    phase.value = GamePhase.PLACING
-    currentTurn.value = 'player'
-    currentShipIndex.value = 0
-    currentOrientation.value = Orientation.HORIZONTAL
-  }
-
-  // Ocultar los barcos después de colocarlos
-function hideShips() {
-  const SubstituteBoard: Cell[][] = playerBoard.value;
-  for (let row = 0; row < BOARD_SIZE; row++) {
-    for (let col = 0; col < BOARD_SIZE; col++) {
-      if (SubstituteBoard[row][col].state === CellState.SHIP) {
-        SubstituteBoard[row][col].state = CellState.EMPTY
-      }
-    }
-  }
-  return SubstituteBoard;
-}
-
-function sendReady() {
-  socket.emit('PlayerReadyBS', roomId)
-}
 
 
 </script>
@@ -350,7 +375,7 @@ function sendReady() {
           v-for="col in 10"
           :key="'cell-' + row + '-' + col"
           class="cell"
-          :class="'cell--' + playerBoard[row - 1][col - 1].state"
+          :class="'cell--' + activeBoard[row - 1][col - 1].state"
           @click="(phase === GamePhase.PLAYING) ? playerAttack(row - 1, col - 1) : playerPlaceShip(row - 1, col - 1)"
         >
         </div>
