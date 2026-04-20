@@ -3,7 +3,7 @@
     import socket from '../utils/socket.ts'
 
     import { useRoute } from 'vue-router'
-import { count } from 'console'
+import { board } from '@/utils/chess.ts'
 
     const route = useRoute()
     const roomId = (route.query.room as string) || 'default'
@@ -111,9 +111,32 @@ import { count } from 'console'
 
     socket.on('connect', () => {
         console.log('Connected to server')
-        socket.emit('JoinLobbyBS',roomId)
+        socket.emit("JoinLobbyBS",roomId)
+        
+        countPlayers=0;
     })
 
+
+    socket.on("PackGamePhaseBS",()=>{
+      socket.emit("SendGamePhaseBS",roomId,phase.value)
+    })
+
+    socket.on("CatchGamePhaseBS", (phase:string)=>{
+      if(phase === GamePhase.PLAYING){
+        socket.emit("RequestEnemyBoard", roomId);
+        socket.emit("RequestPlayerBoardBS", roomId);
+      }
+    })
+
+    socket.on("PackPlayerBoardBS", ()=>{
+      socket.emit("SendPlayerBoardBS", roomId, enemyBoard.value, enemyShips.value, currentTurn.value);
+    })
+
+    socket.on("CatchPlayerBoardBS", (board:Cell[][],ships:Ship[], turn:string)=>{
+      playerBoard.value = board;
+      playerShips.value = ships;
+      currentTurn.value = (turn === 'player')? 'enemy' : 'player';
+    })
 
     socket.on("isReadyBS",(count:number)=>{
         if(countPlayers + count === 2){
@@ -126,6 +149,8 @@ import { count } from 'console'
         console.log('Both players are ready! Starting game...')
         socket.emit("RequestEnemyBoard", roomId);
         phase.value = GamePhase.PLAYING;
+        currentBoard.value = 'player';
+        console.log(currentBoard.value);
     })
 
 
@@ -138,9 +163,9 @@ import { count } from 'console'
     })
 
 
-    socket.on('ReceiveEnemyBoard', (data: { board: Cell[][], ships: Ship[] }) => {
-        enemyBoard.value = data.board
-        enemyShips.value = data.ships
+    socket.on('ReceiveEnemyBoard', ( board: Cell[][], ships: Ship[] ) => {
+        enemyBoard.value = board
+        enemyShips.value = ships
     })
     
 
@@ -157,6 +182,7 @@ import { count } from 'console'
 
 
     // ===== UTILIDADES =====
+
     function isInBounds(coord: Coordinate): boolean {
     return coord.row >= 0 && coord.row < BOARD_SIZE &&
         coord.col >= 0 && coord.col < BOARD_SIZE
@@ -198,11 +224,12 @@ import { count } from 'console'
       phase.value = GamePhase.PLACING
       currentShipIndex.value = 0
       currentOrientation.value = Orientation.HORIZONTAL
+      countPlayers = 0;
     }
 
     // Ocultar los barcos después de colocarlos
     function hideShips() {
-      let SubsBoard: Cell[][] = playerBoard.value;
+      let SubsBoard: Cell[][] = playerBoard.value.map(row => row.map(cell => ({ ...cell })));
       for (let row = 0; row < BOARD_SIZE; row++) {
         for (let col = 0; col < BOARD_SIZE; col++) {
           if (SubsBoard[row][col].state === CellState.SHIP) {
@@ -214,8 +241,13 @@ import { count } from 'console'
     }
 
     function sendReady() {
-      countPlayers++;
+      countPlayers=1;
       socket.emit('PlayerReadyBS', roomId,countPlayers);
+    }
+
+
+    function checkGameStatus():boolean{
+      socket.emit("RequestGamePhaseBS",roomId)
     }
 
     // ===== COLOCAR BARCOS =====
@@ -318,19 +350,19 @@ import { count } from 'console'
 
     socket.emit("SendAttack", roomId, row, col);
 
-    console.log(enemyShips.value.length);
+    if (enemyShips.value.every(s => s.isSunk)) {
+      phase.value = GamePhase.GAME_OVER;
+      alert('¡Has Ganado! Hundiste todos los barcos.');
+      setTimeout(()=>{resetGame()},2000);
+      return
+    }
 
-    // if (enemyShips.value.every(s => s.isSunk)) {
-    //   phase.value = GamePhase.GAME_OVER;
-    //   alert('¡Has Ganado! Hundiste todos los barcos.');
-    //   // resetGame();
-    //   return
-    // }
-
-    currentTurn.value = 'enemy';
-    currentBoard.value = 'player'
-    socket.emit("SwitchTurnBS", roomId);
-    // setTimeout(enemyAttack, 800)
+    if (result !== 'hit'){
+      currentTurn.value = 'enemy';
+      socket.emit("SwitchTurnBS", roomId);
+      setTimeout(() => {currentBoard.value = 'player';}, 2000);
+    }
+    
   }
 
 
@@ -344,13 +376,9 @@ import { count } from 'console'
     if (playerShips.value.every(s => s.isSunk)) {
       phase.value = GamePhase.GAME_OVER;
       alert('¡Has perdido! Todos tus barcos han sido hundidos.');
-      // resetGame();
+      setTimeout(()=>{resetGame()},2000);
       return
     }
-
-    currentTurn.value = 'player'
-    currentBoard.value = 'enemy'
-    // socket.emit("SwitchTurnBS", roomId);
   }
 
 
