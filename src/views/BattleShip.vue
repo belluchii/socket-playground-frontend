@@ -112,7 +112,7 @@ import { board } from '@/utils/chess.ts'
     socket.on('connect', () => {
         console.log('Connected to server')
         socket.emit("JoinLobbyBS",roomId)
-        
+        socket.emit("RequestGamePhaseBS",roomId)
         countPlayers=0;
     })
 
@@ -121,21 +121,31 @@ import { board } from '@/utils/chess.ts'
       socket.emit("SendGamePhaseBS",roomId,phase.value)
     })
 
-    socket.on("CatchGamePhaseBS", (phase:string)=>{
-      if(phase === GamePhase.PLAYING){
-        socket.emit("RequestEnemyBoard", roomId);
+    socket.on("CatchGamePhaseBS", (enemyPhase:string)=>{
+      if(enemyPhase === GamePhase.PLAYING){
+        phase.value = GamePhase.PLAYING;
+        console.log(phase.value);
+        // currentShipIndex.value = 5;
+        socket.emit("RequestEnemyBoardBS", roomId);
         socket.emit("RequestPlayerBoardBS", roomId);
       }
     })
 
     socket.on("PackPlayerBoardBS", ()=>{
-      socket.emit("SendPlayerBoardBS", roomId, enemyBoard.value, enemyShips.value, currentTurn.value);
+      socket.emit("SendPlayerBoardBS", 
+      {
+        lobby: roomId,
+        board: enemyBoard.value.map(row => row.map(cell => ({...cell}))),
+        ships: enemyShips.value,
+        turn: currentTurn.value});
     })
 
     socket.on("CatchPlayerBoardBS", (board:Cell[][],ships:Ship[], turn:string)=>{
-      playerBoard.value = board;
+      playerBoard.value = board
       playerShips.value = ships;
+      showShips();
       currentTurn.value = (turn === 'player')? 'enemy' : 'player';
+      currentBoard.value = (turn === 'player')? 'player' : 'enemy';
     })
 
     socket.on("isReadyBS",(count:number)=>{
@@ -147,7 +157,7 @@ import { board } from '@/utils/chess.ts'
 
     socket.on('StartGameBS', () => {
         console.log('Both players are ready! Starting game...')
-        socket.emit("RequestEnemyBoard", roomId);
+        socket.emit("RequestEnemyBoardBS", roomId);
         phase.value = GamePhase.PLAYING;
         currentBoard.value = 'player';
         console.log(currentBoard.value);
@@ -240,14 +250,19 @@ import { board } from '@/utils/chess.ts'
       return SubsBoard;
     }
 
+    function showShips() {
+      for (let row = 0; row < BOARD_SIZE; row++) {
+        for (let col = 0; col < BOARD_SIZE; col++) {
+          if (playerBoard.value[row][col].shipId !== null) {
+            playerBoard.value[row][col].state = CellState.SHIP
+          }
+        }
+      }
+    }
+
     function sendReady() {
       countPlayers=1;
       socket.emit('PlayerReadyBS', roomId,countPlayers);
-    }
-
-
-    function checkGameStatus():boolean{
-      socket.emit("RequestGamePhaseBS",roomId)
     }
 
     // ===== COLOCAR BARCOS =====
@@ -293,11 +308,6 @@ import { board } from '@/utils/chess.ts'
     if (success) {
       currentShipIndex.value++
       currentBoard.value = 'player'
-      if (currentShipIndex.value >= SHIP_DEFINITIONS.length) {
-        // placeEnemyShips()
-        // phase.value = GamePhase.PLAYING
-        // hideShips();
-      }
     }
   }
 
@@ -353,7 +363,7 @@ import { board } from '@/utils/chess.ts'
     if (enemyShips.value.every(s => s.isSunk)) {
       phase.value = GamePhase.GAME_OVER;
       alert('¡Has Ganado! Hundiste todos los barcos.');
-      setTimeout(()=>{resetGame()},2000);
+      setTimeout(()=>{resetGame()},1000);
       return
     }
 
@@ -376,7 +386,7 @@ import { board } from '@/utils/chess.ts'
     if (playerShips.value.every(s => s.isSunk)) {
       phase.value = GamePhase.GAME_OVER;
       alert('¡Has perdido! Todos tus barcos han sido hundidos.');
-      setTimeout(()=>{resetGame()},2000);
+      setTimeout(()=>{resetGame()},1000);
       return
     }
   }
