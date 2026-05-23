@@ -8,12 +8,18 @@
   --color-cream: #f5f0e8;
   --color-black: #111111;
   --color-orange: #e04b1a;
+  --color-orange-dk:#c17809;
   --color-red: #c0312a;
+  --color-red-dk:#9a2721;
   --color-yellow: #f5c300;
+  --color-yellow-dk: #c49a00;
   --color-blue: #2b4c7e;
   --color-grey: #8e8e8e;
   --color-grey-lt: #cfcdc8;
+  --color-grey-dk: #5e5e5e;
   --color-white: #ffffff;
+  --color-green: #05a100;
+  --color-green-dk: #035b00;
 
   /* ─── Typography ─── */
   --font-display: 'League Spartan', sans-serif;

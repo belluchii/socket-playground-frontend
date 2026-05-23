@@ -3,7 +3,7 @@
     import socket from '../utils/socket.ts'
 
     import { useRoute } from 'vue-router'
-import { board } from '@/utils/chess.ts'
+    import Button from '@/common/Button.vue'
 
     const route = useRoute()
     const roomId = (route.query.room as string) || 'default'
@@ -191,7 +191,7 @@ import { board } from '@/utils/chess.ts'
     })
 
 
-    // ===== UTILIDADES =====
+    // ===== UTILITIES =====
 
     function isInBounds(coord: Coordinate): boolean {
     return coord.row >= 0 && coord.row < BOARD_SIZE &&
@@ -218,16 +218,16 @@ import { board } from '@/utils/chess.ts'
         start: Coordinate,
         size: number,
         orientation: Orientation
-    ): boolean {
+        ): boolean 
+        {
         const cells = getShipCells(start, size, orientation)
         return cells.every(coord => {
-        if (!isInBounds(coord)) return false
-        if (board[coord.row][coord.col].state !== CellState.EMPTY) return false
-        return true
-        })
+          if (!isInBounds(coord)) return false
+          if (board[coord.row][coord.col].state !== CellState.EMPTY) return false
+          return true
+          })
         }
 
-        // ===== REINICIAR =====
     function resetGame() {
       playerBoard.value = fillBoard()
       playerShips.value = []
@@ -237,7 +237,7 @@ import { board } from '@/utils/chess.ts'
       countPlayers = 0;
     }
 
-    // Ocultar los barcos después de colocarlos
+    // Hide ships once placed to prevent cheating, but keep shipId for hit detection
     function hideShips() {
       let SubsBoard: Cell[][] = playerBoard.value.map(row => row.map(cell => ({ ...cell })));
       for (let row = 0; row < BOARD_SIZE; row++) {
@@ -265,7 +265,22 @@ import { board } from '@/utils/chess.ts'
       socket.emit('PlayerReadyBS', roomId,countPlayers);
     }
 
-    // ===== COLOCAR BARCOS =====
+    function deleteLastShip() {
+      
+      console.log(playerShips.value);
+      const lastShip = playerShips.value[currentShipIndex.value-1];
+      
+      if (lastShip === null || lastShip === undefined) return
+      
+      lastShip.coordinates.forEach(coord => {
+        playerBoard.value[coord.row][coord.col].state = CellState.EMPTY
+        playerBoard.value[coord.row][coord.col].shipId = null
+      })
+      playerShips.value = playerShips.value.filter(s => s.id !== lastShip.id)
+      currentShipIndex.value = Math.max(0, currentShipIndex.value - 1)
+    }
+
+    // ===== Ship's Placement =====
   function placeShip(
     board: Cell[][],
     ships: Ship[],
@@ -319,7 +334,7 @@ import { board } from '@/utils/chess.ts'
         : Orientation.HORIZONTAL
   }
 
-// ===== ATAQUES =====
+// ===== ATTACKS =====
 
   function attack(board: Cell[][], ships: Ship[], coord: Coordinate): 'hit' | 'miss' | 'sunk' | 'invalid' {
     const cell = board[coord.row][coord.col]
@@ -351,7 +366,6 @@ import { board } from '@/utils/chess.ts'
   }
 
 
-
   function playerAttack(row: number, col: number) {
     if (phase.value !== GamePhase.PLAYING || currentTurn.value !== 'player') return
 
@@ -375,8 +389,6 @@ import { board } from '@/utils/chess.ts'
     
   }
 
-
-
   function enemyAttack(row: number, col: number) {
     if (phase.value !== GamePhase.PLAYING || currentTurn.value !== 'enemy') return
 
@@ -392,6 +404,28 @@ import { board } from '@/utils/chess.ts'
   }
 
 
+  // ===== DRAG & DROP =====
+
+
+const isDraggingOver = ref(false);
+
+  function startDrag(event: DragEvent, shipDef: ShipDefinition) {
+    event.dataTransfer?.setData('shipId', shipDef.id)
+  }
+  function onDrop(event: DragEvent, row: number, col: number) {
+    event.preventDefault()
+    const shipId = event.dataTransfer?.getData('shipId')
+    const shipDef = SHIP_DEFINITIONS.find(s => s.id === shipId)
+    if (shipDef) {
+      playerPlaceShip(row, col)
+      isDraggingOver.value = false;
+    }
+  }
+
+  function onDragLeave() {
+    isDraggingOver.value = false;
+  }
+
 </script>
 
 <template>
@@ -399,10 +433,10 @@ import { board } from '@/utils/chess.ts'
 
     <div class="boardBackground"></div>
 
-    
-
     <div class="board">
+
       <div class="header"></div>
+
       <div v-for="col in 10" :key="'col-' + col" class="header">
         {{ String.fromCharCode(64 + col) }}
       </div>
@@ -413,24 +447,36 @@ import { board } from '@/utils/chess.ts'
           v-for="col in 10"
           :key="'cell-' + row + '-' + col"
           class="cell"
-          :class="'cell--' + activeBoard[row - 1][col - 1].state"
-          @click="(phase === GamePhase.PLAYING) ? playerAttack(row - 1, col - 1) : playerPlaceShip(row - 1, col - 1)"
+          :class="{ ['cell--' + activeBoard[row - 1][col - 1].state]: true, 'dragging-over':isDraggingOver }"
+          @click="playerAttack(row - 1, col - 1)"
+          @dragover.prevent
+          @dragenter.prevent
+          @dragleave="onDragLeave()"
+          @drop="onDrop($event, row - 1, col - 1)"
         >
         </div>
       </template>
     </div>
 
     <div class="sidebar">
+      <div v-if="phase === GamePhase.PLAYING"> It's {{ currentTurn }}'s turn </div>
       <div v-if="phase === 'placing'" class="container">
-        <p>Colocando: {{ currentShipDef?.id }}</p>
-        <button @click="toggleOrientation">
-          Rotar ({{ currentOrientation }})
+        <!-- <p>Colocando: {{ currentShipDef?.id }}</p> -->
+        <button variant="yellow" size="sm" v-if="currentShipIndex < SHIP_DEFINITIONS.length" @click="toggleOrientation">
+          Rotate ({{ currentOrientation }})
         </button>
-        <button v-if="currentShipIndex >= SHIP_DEFINITIONS.length" @click="sendReady">
+        <button variant="yellow" size="sm" v-if="currentShipIndex >= SHIP_DEFINITIONS.length" @click="sendReady" >
           Ready
         </button>
+          <div class="dragElement" draggable="true" @dragstart="startDrag($event, currentShipDef)">
+            {{currentShipDef?.id}}
+          </div>
+          <button variant="yellow" size="sm" v-if="phase === 'placing' && currentShipIndex>=1" @click="deleteLastShip(currentShipDef)">
+            Delete Last Ship
+          </button>
       </div>
     </div>
+
   </div>
 </template>
 
@@ -454,7 +500,7 @@ import { board } from '@/utils/chess.ts'
     width: 500px;
     height: 500px;
     background-color: var(--color-black);
-    border-radius: 20px;
+    border: 3px solid var(--color-orange);
     z-index: -1;
 }
 
@@ -474,14 +520,61 @@ import { board } from '@/utils/chess.ts'
     font-size: 12px;
 }
 
+.turnText {
+    position: absolute;
+    font-size: 15px;
+    font-weight: bold;
+    color: var(--color-black);
+}
+
+.sidebar {
+  position: absolute;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  justify-items: center;
+  width: 200px;
+  left: calc(50% - 450px); /* 50% + (half of board + margin) */
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: var(--color-black);
+  border: 3px solid var(--color-orange);
+  padding-top: 30px;
+  padding-bottom: 30px;
+  font-family:Georgia, 'Times New Roman', Times, serif;
+  font-weight: 600;
+  color: var(--color-grey-lt);
+}
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+}
+
 .cell:hover {
     background: #2c4a6c;
 }
 
+.cell--ship:hover {
+    background: var(--color-green-dk);
+}
+
+.cell--hit:hover {
+    background: var(--color-yellow-dk);
+}
+
+.cell--miss:hover {
+    background: var(--color-red-dk);
+}
+
+.cell--sunk:hover {
+    background: var(--color-grey-dk);
+}
+
 .cell {
-  background: #1a3a5c;
-  border: 1px solid #2a4a6b;
-  border-radius: 3px;
+  background: var(--color-blue);
+  border: 1px solid var(--color-grey-dk);
   cursor: pointer;
 }
 
@@ -494,36 +587,12 @@ import { board } from '@/utils/chess.ts'
 }
 
 .cell--sunk {
-  background: var(--color-orange);
+  background: var(--color-grey);
 }
 
 .cell--ship {
-  background: #4a7c59;
+  background: var(--color-green);
 }
 
-.sidebar {
-  position: absolute;
-  display: flex;
-  flex-direction: row;
-  justify-content: center;
-  justify-items: center;
-  width: 200px;
-  height: 500px;
-  margin-top: 10px;
-  left: calc(50% - 450px); /* 50% + (mitad del tablero + margen) */
-  top: 50%;
-  transform: translateY(-50%);
-  background-color: var(--color-blue);
-  padding-top: 30px;
-  border-radius: 20px;
-  font-family:Georgia, 'Times New Roman', Times, serif;
-  font-weight: 600;
-  color: var(--color-grey-lt);
-}
-.container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 15px;
-}
+
 </style>
