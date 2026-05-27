@@ -462,18 +462,18 @@ const isDraggingOver = ref(false);
       <div v-if="phase === GamePhase.PLAYING"> It's {{ currentTurn }}'s turn </div>
       <div v-if="phase === 'placing'" class="container">
         <!-- <p>Colocando: {{ currentShipDef?.id }}</p> -->
-        <button variant="yellow" size="sm" v-if="currentShipIndex < SHIP_DEFINITIONS.length" @click="toggleOrientation">
+        <Button variant="yellow" size="sm" v-if="currentShipIndex < SHIP_DEFINITIONS.length" @click="toggleOrientation">
           Rotate ({{ currentOrientation }})
-        </button>
-        <button variant="yellow" size="sm" v-if="currentShipIndex >= SHIP_DEFINITIONS.length" @click="sendReady" >
+        </Button>
+        <Button variant="yellow" size="sm" v-if="currentShipIndex >= SHIP_DEFINITIONS.length" @click="sendReady" >
           Ready
-        </button>
+        </Button>
           <div class="dragElement" draggable="true" @dragstart="startDrag($event, currentShipDef)">
             {{currentShipDef?.id}}
           </div>
-          <button variant="yellow" size="sm" v-if="phase === 'placing' && currentShipIndex>=1" @click="deleteLastShip(currentShipDef)">
+          <Button variant="yellow" size="sm" v-if="phase === 'placing' && currentShipIndex>=1" @click="deleteLastShip(currentShipDef)">
             Delete Last Ship
-          </button>
+          </Button>
       </div>
     </div>
 
